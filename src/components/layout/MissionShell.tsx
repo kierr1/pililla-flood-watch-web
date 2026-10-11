@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
-  Activity, Map, Route, CloudRain, Brain, Building2, Bell, Shield, BarChart3, Radio, Users,
+  Activity, Map, Route, CloudRain, Building2, Bell, Shield, BarChart3, Radio, Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -13,12 +13,11 @@ const NAV = [
   { to: "/gis", label: "GIS / Satellite Map", icon: Map, code: "02" },
   { to: "/evacuation", label: "Evacuation Routes", icon: Route, code: "03" },
   { to: "/weather", label: "Weather & Forecast", icon: CloudRain, code: "04" },
-  { to: "/ml", label: "ML Prediction Engine", icon: Brain, code: "05" },
-  { to: "/centers", label: "Evacuation Centers", icon: Building2, code: "06" },
-  { to: "/alerts", label: "Alert System", icon: Bell, code: "07" },
-  { to: "/admin", label: "Mission Control", icon: Shield, code: "08" },
-  { to: "/analytics", label: "Data Visualization", icon: BarChart3, code: "09" },
-  { to: "/admin/users", label: "Admin Panel", icon: Users, code: "0A", adminOnly: true },
+  { to: "/centers", label: "Evacuation Centers", icon: Building2, code: "05" },
+  { to: "/alerts", label: "Alert System", icon: Bell, code: "06" },
+  { to: "/admin", label: "Mission Control", icon: Shield, code: "07" },
+  { to: "/analytics", label: "Data Visualization", icon: BarChart3, code: "08" },
+  { to: "/admin/users", label: "Admin Panel", icon: Users, code: "09", adminOnly: true },
 ];
 
 export default function MissionShell() {

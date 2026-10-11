@@ -102,6 +102,14 @@
     font-feature-settings: "ss01", "cv11";
   }
 
+  input, textarea, select {
+    color: #000000 !important;
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: rgba(0, 0, 0, 0.55) !important;
+  }
+
   /* Global subtle grid overlay */
   body::before {
     content: '';

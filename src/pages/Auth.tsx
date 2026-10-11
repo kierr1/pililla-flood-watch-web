@@ -170,7 +170,7 @@ function Field({
         minLength={minLength}
         placeholder={placeholder}
         style={{ color: "#000000" }}
-        className="mt-1 w-full px-3 py-2 rounded bg-surface-0 border border-primary/20 focus:border-primary/60 focus:outline-none focus:ring-1 focus:ring-primary/40 mono-font text-sm text-foreground placeholder:text-muted-foreground/60"
+        className="mt-1 w-full px-3 py-2 rounded bg-surface-0 border border-primary/20 focus:border-primary/60 focus:outline-none focus:ring-1 focus:ring-primary/40 mono-font text-sm text-black placeholder:text-muted-foreground/60"
       />
     </label>
   );
