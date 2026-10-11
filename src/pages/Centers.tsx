@@ -1,13 +1,51 @@
-import { Building2, Users, MapPin } from "lucide-react";
+import { useState } from "react";
+import { Building2, Users, MapPin, Trash2, Loader2 } from "lucide-react";
 import { Panel, PageHeader } from "@/components/mission/Panel";
 import { EmptyState } from "@/components/mission/EmptyState";
-import { useEvacuationCenters } from "@/hooks/useData";
+import { useEvacuationCenters, type EvacuationCenter } from "@/hooks/useData";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function Centers() {
   const { data: centers, loading } = useEvacuationCenters();
-  const total = centers.reduce((a, c) => a + (c.capacity ?? 0), 0);
-  const occ = centers.reduce((a, c) => a + (c.occupancy ?? 0), 0);
+  const { isAdmin } = useAuth();
+  const [removedIds, setRemovedIds] = useState<Set<string>>(() => new Set());
+  const [centerToDelete, setCenterToDelete] = useState<EvacuationCenter | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const visibleCenters = centers.filter(center => !removedIds.has(center.id));
+  const total = visibleCenters.reduce((a, c) => a + (c.capacity ?? 0), 0);
+  const occ = visibleCenters.reduce((a, c) => a + (c.occupancy ?? 0), 0);
+
+  async function deleteCenter() {
+    if (!centerToDelete) return;
+    setDeleting(true);
+    const { error } = await supabase
+      .from("evacuation_centers")
+      .delete()
+      .eq("id", centerToDelete.id);
+    setDeleting(false);
+
+    if (error) {
+      toast({ title: "Failed to delete evacuation center", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    setRemovedIds(ids => new Set(ids).add(centerToDelete.id));
+    toast({ title: "Evacuation center deleted", description: centerToDelete.name });
+    setCenterToDelete(null);
+  }
 
   return (
     <div className="space-y-6">
@@ -15,13 +53,13 @@ export default function Centers() {
         code="06"
         title="Evacuation Centers · Pililla"
         subtitle={
-          centers.length
-            ? `${centers.length} registered shelters · ${(total - occ).toLocaleString()} of ${total.toLocaleString()} seats currently available.`
+          visibleCenters.length
+            ? `${visibleCenters.length} registered shelters · ${(total - occ).toLocaleString()} of ${total.toLocaleString()} seats currently available.`
             : "Registered shelters will appear here once admins add them."
         }
       />
 
-      {loading ? null : centers.length === 0 ? (
+      {loading ? null : visibleCenters.length === 0 ? (
         <Panel>
           <EmptyState
             icon={<Building2 className="h-5 w-5" />}
@@ -31,7 +69,7 @@ export default function Centers() {
         </Panel>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {centers.map(c => {
+          {visibleCenters.map(c => {
             const cap = c.capacity ?? 0;
             const occu = c.occupancy ?? 0;
             const pct = cap > 0 ? (occu / cap) * 100 : 0;
@@ -58,6 +96,18 @@ export default function Centers() {
                   )}>{status}</span>
                 </div>
 
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setCenterToDelete(c)}
+                    className="mt-4 inline-flex items-center gap-1.5 rounded border border-risk-critical/40 px-2.5 py-1.5 text-xs text-risk-critical transition hover:bg-risk-critical/10"
+                    aria-label={`Delete ${c.name}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </button>
+                )}
+
                 <div className="mt-4 space-y-2 text-xs">
                   <div className="flex items-center justify-between mono-font">
                     <span className="flex items-center gap-2 text-muted-foreground"><Users className="h-3 w-3" /> Occupancy</span>
@@ -81,6 +131,31 @@ export default function Centers() {
           })}
         </div>
       )}
+
+      <AlertDialog open={!!centerToDelete} onOpenChange={open => !open && !deleting && setCenterToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete evacuation center?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove {centerToDelete?.name} from the evacuation center list.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={event => {
+                event.preventDefault();
+                void deleteCenter();
+              }}
+              disabled={deleting}
+              className="bg-risk-critical text-white hover:bg-risk-critical/90"
+            >
+              {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete center
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
