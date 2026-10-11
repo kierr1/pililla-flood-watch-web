@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Building2, Users, MapPin, Trash2, Loader2 } from "lucide-react";
+import { Building2, Users, MapPin, Trash2, Loader2, Pencil } from "lucide-react";
 import { Panel, PageHeader } from "@/components/mission/Panel";
 import { EmptyState } from "@/components/mission/EmptyState";
 import { useEvacuationCenters, type EvacuationCenter } from "@/hooks/useData";
@@ -17,14 +17,36 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+type CenterForm = {
+  name: string;
+  capacity: string;
+  occupancy: string;
+  status: string;
+  lat: string;
+  lng: string;
+};
 
 export default function Centers() {
   const { data: centers, loading } = useEvacuationCenters();
   const { isAdmin } = useAuth();
   const [removedIds, setRemovedIds] = useState<Set<string>>(() => new Set());
+  const [updatedCenters, setUpdatedCenters] = useState<Map<string, EvacuationCenter>>(() => new Map());
   const [centerToDelete, setCenterToDelete] = useState<EvacuationCenter | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const visibleCenters = centers.filter(center => !removedIds.has(center.id));
+  const [centerToEdit, setCenterToEdit] = useState<EvacuationCenter | null>(null);
+  const [editForm, setEditForm] = useState<CenterForm | null>(null);
+  const [saving, setSaving] = useState(false);
+  const visibleCenters = centers
+    .filter(center => !removedIds.has(center.id))
+    .map(center => updatedCenters.get(center.id) ?? center);
   const total = visibleCenters.reduce((a, c) => a + (c.capacity ?? 0), 0);
   const occ = visibleCenters.reduce((a, c) => a + (c.occupancy ?? 0), 0);
 
@@ -45,6 +67,47 @@ export default function Centers() {
     setRemovedIds(ids => new Set(ids).add(centerToDelete.id));
     toast({ title: "Evacuation center deleted", description: centerToDelete.name });
     setCenterToDelete(null);
+  }
+
+  function openEdit(center: EvacuationCenter) {
+    setCenterToEdit(center);
+    setEditForm({
+      name: center.name,
+      capacity: center.capacity?.toString() ?? "",
+      occupancy: center.occupancy?.toString() ?? "",
+      status: center.status ?? "available",
+      lat: center.lat?.toString() ?? "",
+      lng: center.lng?.toString() ?? "",
+    });
+  }
+
+  async function saveCenter(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!centerToEdit || !editForm) return;
+    setSaving(true);
+    const updates = {
+      name: editForm.name.trim(),
+      capacity: numOrNull(editForm.capacity),
+      occupancy: numOrNull(editForm.occupancy),
+      status: editForm.status.trim() || null,
+      lat: numOrNull(editForm.lat),
+      lng: numOrNull(editForm.lng),
+    };
+    const { error } = await supabase
+      .from("evacuation_centers")
+      .update(updates)
+      .eq("id", centerToEdit.id);
+    setSaving(false);
+
+    if (error) {
+      toast({ title: "Failed to update evacuation center", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    setUpdatedCenters(previous => new Map(previous).set(centerToEdit.id, { ...centerToEdit, ...updates }));
+    toast({ title: "Evacuation center updated", description: updates.name });
+    setCenterToEdit(null);
+    setEditForm(null);
   }
 
   return (
@@ -97,15 +160,26 @@ export default function Centers() {
                 </div>
 
                 {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => setCenterToDelete(c)}
-                    className="mt-4 inline-flex items-center gap-1.5 rounded border border-risk-critical/40 px-2.5 py-1.5 text-xs text-risk-critical transition hover:bg-risk-critical/10"
-                    aria-label={`Delete ${c.name}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
-                  </button>
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(c)}
+                      className="inline-flex items-center gap-1.5 rounded border border-primary/40 px-2.5 py-1.5 text-xs text-primary transition hover:bg-primary/10"
+                      aria-label={`Edit ${c.name}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCenterToDelete(c)}
+                      className="inline-flex items-center gap-1.5 rounded border border-risk-critical/40 px-2.5 py-1.5 text-xs text-risk-critical transition hover:bg-risk-critical/10"
+                      aria-label={`Delete ${c.name}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
+                  </div>
                 )}
 
                 <div className="mt-4 space-y-2 text-xs">
@@ -156,6 +230,97 @@ export default function Centers() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog
+        open={!!centerToEdit}
+        onOpenChange={open => {
+          if (!open && !saving) {
+            setCenterToEdit(null);
+            setEditForm(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit evacuation center</DialogTitle>
+          </DialogHeader>
+          {editForm && (
+            <form onSubmit={saveCenter} className="space-y-3">
+              <CenterField label="Name" value={editForm.name} onChange={value => setEditForm({ ...editForm, name: value })} required />
+              <div className="grid grid-cols-2 gap-3">
+                <CenterField label="Capacity" type="number" min="0" value={editForm.capacity} onChange={value => setEditForm({ ...editForm, capacity: value })} />
+                <CenterField label="Occupancy" type="number" min="0" value={editForm.occupancy} onChange={value => setEditForm({ ...editForm, occupancy: value })} />
+                <CenterField label="Status" value={editForm.status} onChange={value => setEditForm({ ...editForm, status: value })} />
+                <CenterField label="Latitude" type="number" min="-90" max="90" step="any" value={editForm.lat} onChange={value => setEditForm({ ...editForm, lat: value })} />
+                <CenterField label="Longitude" type="number" min="-180" max="180" step="any" value={editForm.lng} onChange={value => setEditForm({ ...editForm, lng: value })} />
+              </div>
+              <DialogFooter>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCenterToEdit(null);
+                    setEditForm(null);
+                  }}
+                  disabled={saving}
+                  className="rounded border border-primary/20 px-4 py-2 text-sm text-muted-foreground hover:bg-primary/5 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving || !editForm.name.trim()}
+                  className="inline-flex items-center justify-center gap-2 rounded bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary-glow disabled:opacity-50"
+                >
+                  {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Save changes
+                </button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
+}
+
+function CenterField({
+  label,
+  value,
+  onChange,
+  type = "text",
+  min,
+  max,
+  step,
+  required,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  min?: string;
+  max?: string;
+  step?: string;
+  required?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="mono-label">{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        min={min}
+        max={max}
+        step={step}
+        required={required}
+        className="mt-1 w-full rounded border border-primary/20 bg-surface-0 px-3 py-2 text-sm text-black focus:border-primary/60 focus:outline-none"
+      />
+    </label>
+  );
+}
+
+function numOrNull(value: string): number | null {
+  if (!value.trim()) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
