@@ -1,8 +1,11 @@
 import { useState } from "react";
-import { Bell, BellRing, Mail, MessageSquare, Trash2, Volume2, X } from "lucide-react";
+import { Bell, BellRing, Loader2, Mail, MessageSquare, Trash2, Volume2, X } from "lucide-react";
 import { Panel, PageHeader, RiskBadge } from "@/components/mission/Panel";
 import { EmptyState } from "@/components/mission/EmptyState";
 import { useAlerts, type Alert } from "@/hooks/useData";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,11 +19,37 @@ import {
 
 export default function Alerts() {
   const { data: alerts, loading } = useAlerts();
-  const [hiddenAlertIds, setHiddenAlertIds] = useState<Set<string>>(() => new Set());
-  const [alertToHide, setAlertToHide] = useState<Alert | null>(null);
-  const visibleAlerts = alerts.filter(alert => !hiddenAlertIds.has(alert.id));
+  const { isAdmin } = useAuth();
+  const [deletedAlertIds, setDeletedAlertIds] = useState<Set<string>>(() => new Set());
+  const [alertToDelete, setAlertToDelete] = useState<Alert | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const visibleAlerts = alerts.filter(alert => !deletedAlertIds.has(alert.id));
   const critical = visibleAlerts.find(a => a.level === "critical");
   const [showModal, setShowModal] = useState(true);
+
+  async function deleteAlert() {
+    if (!alertToDelete || deleting) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from("alerts").delete().eq("id", alertToDelete.id);
+      if (error) {
+        toast({ title: "Failed to delete alert", description: error.message, variant: "destructive" });
+        return;
+      }
+
+      setDeletedAlertIds(ids => new Set(ids).add(alertToDelete.id));
+      toast({ title: "Alert deleted", description: alertToDelete.title });
+      setAlertToDelete(null);
+    } catch (error) {
+      toast({
+        title: "Failed to delete alert",
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -67,15 +96,18 @@ export default function Alerts() {
                     {a.message && <p className="text-xs text-foreground/80 mt-1">{a.message}</p>}
                     <p className="mono-font text-[10px] text-muted-foreground mt-1">Issued {new Date(a.issued_at).toLocaleString("en-PH", { hour12: false })}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setAlertToHide(a)}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded border border-risk-critical/40 px-2.5 py-1.5 text-xs text-risk-critical transition hover:bg-risk-critical/10"
-                    aria-label={`Delete ${a.title} from this feed`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
-                  </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setAlertToDelete(a)}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded border border-risk-critical/40 px-2.5 py-1.5 text-xs text-risk-critical transition hover:bg-risk-critical/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label={`Delete ${a.title}`}
+                      disabled={deleting}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
+                  )}
                 </div>
               </li>
             ))}
@@ -121,26 +153,26 @@ export default function Alerts() {
         </div>
       )}
 
-      <AlertDialog open={!!alertToHide} onOpenChange={open => !open && setAlertToHide(null)}>
+      <AlertDialog open={!!alertToDelete} onOpenChange={open => !open && !deleting && setAlertToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove alert from this feed?</AlertDialogTitle>
+            <AlertDialogTitle>Delete alert?</AlertDialogTitle>
             <AlertDialogDescription>
-              “{alertToHide?.title}” will be hidden from this page only. The stored alert will not be deleted.
+              This will permanently delete “{alertToDelete?.title}” from the alert system.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => {
-                if (alertToHide) {
-                  setHiddenAlertIds(ids => new Set(ids).add(alertToHide.id));
-                  setAlertToHide(null);
-                }
+              onClick={event => {
+                event.preventDefault();
+                void deleteAlert();
               }}
+              disabled={deleting}
               className="bg-risk-critical text-white hover:bg-risk-critical/90"
             >
-              Remove from feed
+              {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete alert
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
