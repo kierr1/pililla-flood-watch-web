@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, ArrowRight, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAlerts } from "@/hooks/useData";
+import { useAlertDismissals } from "@/hooks/useAlertDismissals";
+import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
 const TONE: Record<string, { bar: string; text: string; bg: string; label: string }> = {
@@ -15,13 +17,30 @@ const LEVEL_RANK: Record<string, number> = { critical: 4, high: 3, moderate: 2, 
 
 export default function AlertBanner() {
   const { data: alerts, loading } = useAlerts();
-  const [dismissedAlertId, setDismissedAlertId] = useState<string | null>(null);
-  if (loading) return null;
-  if (!alerts.length) return null;
+  const { user, isAdmin } = useAuth();
+  const { dismissedAlertIds, loading: dismissalsLoading, dismissAlert } = useAlertDismissals(user?.id ?? null);
+  const [dismissedAdminAlertId, setDismissedAdminAlertId] = useState<string | null>(null);
+  const [deletedAlertIds, setDeletedAlertIds] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    const handleAlertDeleted = (event: Event) => {
+      const alertId = (event as CustomEvent<string>).detail;
+      setDeletedAlertIds(ids => new Set(ids).add(alertId));
+    };
+    window.addEventListener("alert-deleted", handleAlertDeleted);
+    return () => window.removeEventListener("alert-deleted", handleAlertDeleted);
+  }, []);
+
+  if (loading || dismissalsLoading) return null;
+  const visibleAlerts = alerts.filter(alert =>
+    !deletedAlertIds.has(alert.id) &&
+    !dismissedAlertIds.has(alert.id) &&
+    !(isAdmin && dismissedAdminAlertId === alert.id)
+  );
+  if (!visibleAlerts.length) return null;
 
   // Pick the highest-severity active alert
-  const top = [...alerts].sort((a, b) => (LEVEL_RANK[b.level] ?? 0) - (LEVEL_RANK[a.level] ?? 0))[0];
-  if (dismissedAlertId === top.id) return null;
+  const top = [...visibleAlerts].sort((a, b) => (LEVEL_RANK[b.level] ?? 0) - (LEVEL_RANK[a.level] ?? 0))[0];
   const tone = TONE[top.level] ?? TONE.moderate;
 
   return (
@@ -52,7 +71,10 @@ export default function AlertBanner() {
         </Link>
         <button
           type="button"
-          onClick={() => setDismissedAlertId(top.id)}
+          onClick={() => {
+            if (isAdmin) setDismissedAdminAlertId(top.id);
+            else void dismissAlert(top.id);
+          }}
           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded text-muted-foreground transition hover:bg-foreground/10 hover:text-foreground"
           aria-label={`Dismiss ${top.title} notification`}
           title="Dismiss notification"

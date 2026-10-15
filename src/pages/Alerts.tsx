@@ -3,6 +3,7 @@ import { Bell, BellRing, Loader2, Mail, MessageSquare, Trash2, Volume2, X } from
 import { Panel, PageHeader, RiskBadge } from "@/components/mission/Panel";
 import { EmptyState } from "@/components/mission/EmptyState";
 import { useAlerts, type Alert } from "@/hooks/useData";
+import { useAlertDismissals } from "@/hooks/useAlertDismissals";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -19,35 +20,46 @@ import {
 
 export default function Alerts() {
   const { data: alerts, loading } = useAlerts();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
+  const { dismissedAlertIds, loading: dismissalsLoading, dismissAlert } = useAlertDismissals(user?.id ?? null);
   const [deletedAlertIds, setDeletedAlertIds] = useState<Set<string>>(() => new Set());
-  const [alertToDelete, setAlertToDelete] = useState<Alert | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const visibleAlerts = alerts.filter(alert => !deletedAlertIds.has(alert.id));
-  const critical = visibleAlerts.find(a => a.level === "critical");
+  const [alertToManage, setAlertToManage] = useState<Alert | null>(null);
+  const [saving, setSaving] = useState(false);
+  const visibleAlerts = alerts.filter(alert =>
+    !deletedAlertIds.has(alert.id) && !dismissedAlertIds.has(alert.id)
+  );
+  const critical = dismissalsLoading ? undefined : visibleAlerts.find(a => a.level === "critical");
   const [showModal, setShowModal] = useState(true);
 
-  async function deleteAlert() {
-    if (!alertToDelete || deleting) return;
-    setDeleting(true);
+  async function manageAlert() {
+    if (!alertToManage || saving) return;
+    setSaving(true);
     try {
-      const { error } = await supabase.from("alerts").delete().eq("id", alertToDelete.id);
-      if (error) {
-        toast({ title: "Failed to delete alert", description: error.message, variant: "destructive" });
-        return;
+      if (isAdmin) {
+        const { data, error } = await supabase
+          .from("alerts")
+          .delete()
+          .eq("id", alertToManage.id)
+          .select("id");
+        if (error) throw error;
+        if (!data?.length) throw new Error("The alert was not deleted. Check your admin permissions and try again.");
+        setDeletedAlertIds(ids => new Set(ids).add(alertToManage.id));
+        window.dispatchEvent(new CustomEvent("alert-deleted", { detail: alertToManage.id }));
+        toast({ title: "Alert deleted", description: alertToManage.title });
+      } else {
+        const dismissed = await dismissAlert(alertToManage.id);
+        if (!dismissed) return;
+        toast({ title: "Alert dismissed", description: "It will stay hidden from your account." });
       }
-
-      setDeletedAlertIds(ids => new Set(ids).add(alertToDelete.id));
-      toast({ title: "Alert deleted", description: alertToDelete.title });
-      setAlertToDelete(null);
+      setAlertToManage(null);
     } catch (error) {
       toast({
-        title: "Failed to delete alert",
+        title: isAdmin ? "Failed to delete alert" : "Failed to dismiss alert",
         description: error instanceof Error ? error.message : String(error),
         variant: "destructive",
       });
     } finally {
-      setDeleting(false);
+      setSaving(false);
     }
   }
 
@@ -75,7 +87,7 @@ export default function Alerts() {
       </div>
 
       <Panel label="LIVE FEED" title={`${visibleAlerts.length} Active Alert${visibleAlerts.length === 1 ? "" : "s"}`}>
-        {loading ? null : visibleAlerts.length === 0 ? (
+        {loading || dismissalsLoading ? null : visibleAlerts.length === 0 ? (
           <EmptyState
             icon={<Bell className="h-5 w-5" />}
             title="No active alerts"
@@ -96,18 +108,20 @@ export default function Alerts() {
                     {a.message && <p className="text-xs text-foreground/80 mt-1">{a.message}</p>}
                     <p className="mono-font text-[10px] text-muted-foreground mt-1">Issued {new Date(a.issued_at).toLocaleString("en-PH", { hour12: false })}</p>
                   </div>
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      onClick={() => setAlertToDelete(a)}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded border border-risk-critical/40 px-2.5 py-1.5 text-xs text-risk-critical transition hover:bg-risk-critical/10 disabled:cursor-not-allowed disabled:opacity-50"
-                      aria-label={`Delete ${a.title}`}
-                      disabled={deleting}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setAlertToManage(a)}
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded border px-2.5 py-1.5 text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                      isAdmin
+                        ? "border-risk-critical/40 text-risk-critical hover:bg-risk-critical/10"
+                        : "border-primary/30 text-primary hover:bg-primary/10"
+                    }`}
+                    aria-label={`${isAdmin ? "Delete" : "Dismiss"} ${a.title}`}
+                    disabled={saving}
+                  >
+                    {isAdmin ? <Trash2 className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                    {isAdmin ? "Delete" : "Dismiss"}
+                  </button>
                 </div>
               </li>
             ))}
@@ -153,26 +167,28 @@ export default function Alerts() {
         </div>
       )}
 
-      <AlertDialog open={!!alertToDelete} onOpenChange={open => !open && !deleting && setAlertToDelete(null)}>
+      <AlertDialog open={!!alertToManage} onOpenChange={open => !open && !saving && setAlertToManage(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete alert?</AlertDialogTitle>
+            <AlertDialogTitle>{isAdmin ? "Delete alert?" : "Dismiss alert?"}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete “{alertToDelete?.title}” from the alert system.
+              {isAdmin
+                ? `This will permanently delete “${alertToManage?.title}” from the alert system.`
+                : `“${alertToManage?.title}” will be hidden from your account and will not appear again for you.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={event => {
                 event.preventDefault();
-                void deleteAlert();
+                void manageAlert();
               }}
-              disabled={deleting}
-              className="bg-risk-critical text-white hover:bg-risk-critical/90"
+              disabled={saving}
+              className={isAdmin ? "bg-risk-critical text-white hover:bg-risk-critical/90" : ""}
             >
-              {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Delete alert
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isAdmin ? "Delete alert" : "Dismiss alert"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
