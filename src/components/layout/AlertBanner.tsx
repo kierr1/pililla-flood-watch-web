@@ -1,4 +1,5 @@
-import { AlertTriangle, ArrowRight } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, ArrowRight, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAlerts } from "@/hooks/useData";
 import { cn } from "@/lib/utils";
@@ -14,11 +15,13 @@ const LEVEL_RANK: Record<string, number> = { critical: 4, high: 3, moderate: 2, 
 
 export default function AlertBanner() {
   const { data: alerts, loading } = useAlerts();
+  const [dismissedAlertId, setDismissedAlertId] = useState<string | null>(null);
   if (loading) return null;
   if (!alerts.length) return null;
 
   // Pick the highest-severity active alert
   const top = [...alerts].sort((a, b) => (LEVEL_RANK[b.level] ?? 0) - (LEVEL_RANK[a.level] ?? 0))[0];
+  if (dismissedAlertId === top.id) return null;
   const tone = TONE[top.level] ?? TONE.moderate;
 
   return (
@@ -47,6 +50,15 @@ export default function AlertBanner() {
         >
           Find Safest Route Now <ArrowRight className="h-3.5 w-3.5" />
         </Link>
+        <button
+          type="button"
+          onClick={() => setDismissedAlertId(top.id)}
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded text-muted-foreground transition hover:bg-foreground/10 hover:text-foreground"
+          aria-label={`Dismiss ${top.title} notification`}
+          title="Dismiss notification"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
     </div>
   );

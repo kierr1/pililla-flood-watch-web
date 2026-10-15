@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
-import { BarChart3, Image as ImageIcon } from "lucide-react";
+import { BarChart3, Download, Image as ImageIcon } from "lucide-react";
 
 const tt = {
   contentStyle: { background: "hsl(var(--surface-2))", border: "1px solid hsl(var(--primary) / 0.4)", borderRadius: 4, fontFamily: "JetBrains Mono", fontSize: 11 },
@@ -14,9 +14,34 @@ const tt = {
 };
 
 export default function Analytics() {
-  const { data: readings } = useFloodReadings();
+  const { data: readings, loading: readingsLoading } = useFloodReadings();
   const { data: barangays } = useBarangays();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  function downloadReadingHistory() {
+    const columns = ["Recorded At", "Station ID", "Rainfall (mm)", "Water Level (m)", "Soil Moisture (%)", "Wind Speed", "Image URL"];
+    const rows = readings.map(reading => [
+      reading.recorded_at,
+      reading.station_id ?? "",
+      reading.rainfall_mm?.toString() ?? "",
+      reading.water_level_m?.toString() ?? "",
+      reading.soil_moisture_percent?.toString() ?? "",
+      reading.wind_speed?.toString() ?? "",
+      reading.image_url ?? "",
+    ]);
+    const csv = [columns, ...rows]
+      .map(row => row.map(value => `"${value.replace(/"/g, '""')}"`).join(","))
+      .join("\r\n");
+    const file = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `flood-reading-history-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 
   const trend = [...readings].slice(0, 24).reverse().map(r => ({
     time: new Date(r.recorded_at).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", hour12: false }),
@@ -74,7 +99,21 @@ export default function Analytics() {
         </Panel>
       </div>
 
-      <Panel label="EVENT LOG" title="Recent Sensor Readings">
+      <Panel
+        label="EVENT LOG"
+        title="Recent Sensor Readings"
+        action={
+          <button
+            type="button"
+            onClick={downloadReadingHistory}
+            disabled={readingsLoading || readings.length === 0}
+            className="inline-flex items-center gap-2 rounded border border-primary/40 px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download History
+          </button>
+        }
+      >
         {trend.length === 0 ? (
           <EmptyState title="No readings logged" description="Once sensor stations begin reporting, recent readings will appear here." />
         ) : (
