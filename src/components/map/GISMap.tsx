@@ -110,7 +110,7 @@ export default function GISMap({
     if (!containerRef.current || mapRef.current) return;
     const map = L.map(containerRef.current, {
       center: [PILILLA_CENTER[1], PILILLA_CENTER[0]],
-      zoom: 13,
+      zoom: 10,
       zoomControl: true,
       attributionControl: true,
     });
