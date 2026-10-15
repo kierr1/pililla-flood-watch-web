@@ -36,21 +36,26 @@ export default function GIS() {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           setUserLocation([
-            position.coords.latitude,
             position.coords.longitude,
+            position.coords.latitude,
           ]);
           setLocationError(null);
         },
         (error) => {
           console.error("Geolocation error:", error);
-          setLocationError("Location access denied. Using map center.");
-          // Fallback to a default location (e.g., Pililla, Rizal proper)
-          setUserLocation([14.2744, 121.2450]);
+          setUserLocation(null);
+          setLocationError(
+            error.code === error.PERMISSION_DENIED
+              ? "Location access denied. Allow location access in your browser to show your position."
+              : error.code === error.POSITION_UNAVAILABLE
+                ? "Your current location could not be determined."
+                : "Timed out while getting your current location."
+          );
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
-      setLocationError("Geolocation not supported.");
+      setLocationError("Current location is not supported by this browser.");
     }
   }, []);
 
@@ -87,6 +92,12 @@ export default function GIS() {
         title="GIS · Satellite Mapping"
         subtitle="Multi-layer geospatial intelligence with realtime flood-risk heatmap driven by live sensor and weather streams."
       />
+
+      {locationError && (
+        <p className="text-xs text-muted-foreground" role="status">
+          {locationError}
+        </p>
+      )}
 
       <div className="relative">
         <div className="absolute top-3 right-16 z-20 glass-panel px-3 py-1.5 flex items-center gap-2 pointer-events-none">
