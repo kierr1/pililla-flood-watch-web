@@ -1,12 +1,25 @@
 import { useState } from "react";
-import { Bell, BellRing, Mail, MessageSquare, Volume2, X } from "lucide-react";
+import { Bell, BellRing, Mail, MessageSquare, Trash2, Volume2, X } from "lucide-react";
 import { Panel, PageHeader, RiskBadge } from "@/components/mission/Panel";
 import { EmptyState } from "@/components/mission/EmptyState";
-import { useAlerts } from "@/hooks/useData";
+import { useAlerts, type Alert } from "@/hooks/useData";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function Alerts() {
   const { data: alerts, loading } = useAlerts();
-  const critical = alerts.find(a => a.level === "critical");
+  const [hiddenAlertIds, setHiddenAlertIds] = useState<Set<string>>(() => new Set());
+  const [alertToHide, setAlertToHide] = useState<Alert | null>(null);
+  const visibleAlerts = alerts.filter(alert => !hiddenAlertIds.has(alert.id));
+  const critical = visibleAlerts.find(a => a.level === "critical");
   const [showModal, setShowModal] = useState(true);
 
   return (
@@ -32,8 +45,8 @@ export default function Alerts() {
         ))}
       </div>
 
-      <Panel label="LIVE FEED" title={`${alerts.length} Active Alert${alerts.length === 1 ? "" : "s"}`}>
-        {loading ? null : alerts.length === 0 ? (
+      <Panel label="LIVE FEED" title={`${visibleAlerts.length} Active Alert${visibleAlerts.length === 1 ? "" : "s"}`}>
+        {loading ? null : visibleAlerts.length === 0 ? (
           <EmptyState
             icon={<Bell className="h-5 w-5" />}
             title="No active alerts"
@@ -41,11 +54,11 @@ export default function Alerts() {
           />
         ) : (
           <ul className="space-y-3">
-            {alerts.map(a => (
+            {visibleAlerts.map(a => (
               <li key={a.id} className="p-4 rounded border bg-surface-2/40 border-primary/15">
                 <div className="flex items-start gap-3">
                   <BellRing className="h-5 w-5 shrink-0 mt-0.5 text-primary" />
-                  <div className="flex-1">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <RiskBadge level={a.level as any} />
                       <h4 className="font-bold text-sm">{a.title}</h4>
@@ -54,6 +67,15 @@ export default function Alerts() {
                     {a.message && <p className="text-xs text-foreground/80 mt-1">{a.message}</p>}
                     <p className="mono-font text-[10px] text-muted-foreground mt-1">Issued {new Date(a.issued_at).toLocaleString("en-PH", { hour12: false })}</p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setAlertToHide(a)}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded border border-risk-critical/40 px-2.5 py-1.5 text-xs text-risk-critical transition hover:bg-risk-critical/10"
+                    aria-label={`Delete ${a.title} from this feed`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </button>
                 </div>
               </li>
             ))}
@@ -98,6 +120,31 @@ export default function Alerts() {
           </div>
         </div>
       )}
+
+      <AlertDialog open={!!alertToHide} onOpenChange={open => !open && setAlertToHide(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove alert from this feed?</AlertDialogTitle>
+            <AlertDialogDescription>
+              “{alertToHide?.title}” will be hidden from this page only. The stored alert will not be deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (alertToHide) {
+                  setHiddenAlertIds(ids => new Set(ids).add(alertToHide.id));
+                  setAlertToHide(null);
+                }
+              }}
+              className="bg-risk-critical text-white hover:bg-risk-critical/90"
+            >
+              Remove from feed
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
