@@ -29,6 +29,54 @@ export default function GIS() {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [routingDestination, setRoutingDestination] = useState<{ lat: number; lng: number; name: string } | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
+  const [routeStatus, setRouteStatus] = useState<string | null>(null);
+
+  // Ask a road router for a complete road geometry. Never draw a straight
+  // line between the GPS location and the evacuation center.
+  useEffect(() => {
+    setRouteCoords([]);
+    if (!routingDestination) {
+      setRouteStatus(null);
+      return;
+    }
+    if (!userLocation) {
+      setRouteStatus("Enable location access to calculate a road route.");
+      return;
+    }
+    const controller = new AbortController();
+    const [lng, lat] = userLocation;
+    const url = `https://router.project-osrm.org/route/v1/driving/${lng},${lat};${routingDestination.lng},${routingDestination.lat}?overview=full&geometries=geojson&steps=false`;
+    setRouteStatus("Calculating road route...");
+    fetch(url, { signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) throw new Error("Routing service unavailable");
+        return response.json();
+      })
+      .then(data => {
+        if (controller.signal.aborted) return;
+        const route = data?.routes?.[0];
+        const coords = route?.geometry?.coordinates;
+        if (data.code !== "Ok" || !Array.isArray(coords) || coords.length < 2) {
+          throw new Error("No drivable route found");
+        }
+        const valid = coords.filter((p: unknown): p is [number, number] =>
+          Array.isArray(p) && p.length >= 2 &&
+          Number.isFinite(p[0]) && Number.isFinite(p[1]) &&
+          Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90
+        );
+        if (valid.length < 2) throw new Error("Invalid routing geometry");
+        setRouteCoords(valid);
+        setRouteStatus(`Road route: ${(route.distance / 1000).toFixed(1)} km, approximately ${Math.round(route.duration / 60)} min by car. Check local flood and road conditions.`);
+      })
+      .catch(error => {
+        if (controller.signal.aborted) return;
+        setRouteCoords([]);
+        setRouteStatus(error instanceof Error ? error.message : "Route unavailable");
+      });
+    return () => controller.abort();
+  }, [userLocation, routingDestination]);
+
 
   // Get user's current location on mount
   useEffect(() => {
@@ -111,7 +159,12 @@ export default function GIS() {
           </span>
         </div>
 
-        {/* --- NEW: Route Status Panel --- */}
+        {routeStatus && (
+          <div className="absolute bottom-16 right-3 z-20 glass-panel px-3 py-2 text-xs max-w-[280px]" role="status">
+            {routeStatus}
+          </div>
+        )}
+        {/* --- Route Status Panel --- */}
         {routingDestination && (
           <div className="absolute top-3 left-3 z-20 glass-panel px-3 py-2 flex items-center gap-3">
             <Navigation className="h-4 w-4 text-primary animate-pulse" />
@@ -135,6 +188,7 @@ export default function GIS() {
 
         <GISMap
           className="h-[640px]"
+          routes={routeCoords.length ? [{ coords: routeCoords }] : []}
           barangays={mapBarangays}
           sensors={mapSensors}
           centers={mapCenters}
