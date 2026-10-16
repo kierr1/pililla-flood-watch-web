@@ -84,3 +84,37 @@ export const useEvacuationCenters = () => useTable<EvacuationCenter>("evacuation
 export const useAlerts            = () => useTable<Alert>("alerts", { column: "issued_at", ascending: false });
 export const useWeatherForecasts  = () => useTable<WeatherForecast>("weather_forecasts", { column: "forecast_for" });
 export const useFloodReadings     = () => useTable<FloodReading>("flood_readings", { column: "recorded_at", ascending: false });
+
+
+/** OpenWeather 5-day / 3-hour forecast, shared with the Weather & Forecast screen.
+ * Returns mean predicted rainfall (mm per 3-hour period) for the next 24 hours.
+ * This is forecast precipitation, not measured rainfall.
+ */
+export function useOpenWeatherRainfall() {
+  const [rainfall, setRainfall] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    const key = import.meta.env.OPENWEATHER_API_KEY?.trim();
+    if (!key) { setError("OpenWeather key not configured"); return; }
+    const controller = new AbortController();
+    // Pililla municipal center coordinates
+    import("@/data/pililla").then(({ PILILLA_CENTER }) => {
+      if (controller.signal.aborted) return;
+      const [lon, lat] = PILILLA_CENTER;
+      const params = new URLSearchParams({ lat: String(lat), lon: String(lon), appid: key, units: "metric" });
+      return fetch(`https://api.openweathermap.org/data/2.5/forecast?${params}`, { signal: controller.signal })
+        .then(res => { if (!res.ok) throw new Error(`OpenWeather request failed (${res.status})`); return res.json(); })
+        .then((data: { list?: { dt: number; rain?: { "3h"?: number } }[] }) => {
+          if (controller.signal.aborted) return;
+          const now = Date.now() / 1000;
+          const next = (data.list ?? []).filter(p => p.dt >= now).slice(0, 8);
+          if (!next.length) throw new Error("No forecast rainfall data");
+          const total = next.reduce((sum, p) => sum + (p.rain?.["3h"] ?? 0), 0);
+          setRainfall(total / next.length);
+          setError(null);
+        });
+    }).catch(e => { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "Forecast unavailable"); });
+    return () => controller.abort();
+  }, []);
+  return { rainfall, error };
+}
