@@ -1,39 +1,8 @@
-import { useEffect, useState } from "react";
 import { CloudRain, Wind, Droplets, Gauge, Cloud, CloudLightning, CloudDrizzle } from "lucide-react";
 import { Panel, PageHeader } from "@/components/mission/Panel";
 import { EmptyState } from "@/components/mission/EmptyState";
-import { useWeatherForecasts, type WeatherForecast } from "@/hooks/useData";
-import { PILILLA_CENTER } from "@/data/pililla";
+import { useOpenMeteo } from "@/hooks/useOpenMeteo";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from "recharts";
-
-interface OpenWeatherCurrent {
-  name: string;
-  dt: number;
-  main: { temp: number; feels_like: number; humidity: number; pressure: number };
-  weather: Array<{ description: string }>;
-  wind: { speed: number };
-  rain?: { "1h"?: number };
-}
-
-interface OpenWeatherForecastResponse {
-  list: Array<{
-    dt: number;
-    main: { temp: number };
-    pop: number;
-    weather: Array<{ description: string }>;
-    wind: { speed: number };
-    rain?: { "3h"?: number };
-  }>;
-}
-
-interface ForecastPoint {
-  forecast_for: string;
-  rain_mm: number;
-  rain_chance: number;
-  temp_c: number;
-  wind_kph: number;
-  condition: string;
-}
 
 const tt = {
   contentStyle: { background: "hsl(var(--surface-2))", border: "1px solid hsl(var(--primary) / 0.4)", borderRadius: 4, fontFamily: "JetBrains Mono", fontSize: 11 },
@@ -41,65 +10,9 @@ const tt = {
 };
 
 export default function Weather() {
-  const { data: forecasts, loading: forecastsLoading } = useWeatherForecasts();
-  const [current, setCurrent] = useState<OpenWeatherCurrent | null>(null);
-  const [openWeatherForecast, setOpenWeatherForecast] = useState<ForecastPoint[]>([]);
-  const [weatherLoading, setWeatherLoading] = useState(true);
-  const [weatherError, setWeatherError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const apiKey = import.meta.env.OPENWEATHER_API_KEY?.trim();
-    if (!apiKey) {
-      setWeatherError("OpenWeather is not configured. Set OPENWEATHER_API_KEY in the Render Environment settings and redeploy.");
-      setWeatherLoading(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    const [lng, lat] = PILILLA_CENTER;
-    const params = new URLSearchParams({ lat: String(lat), lon: String(lng), appid: apiKey, units: "metric" });
-
-    async function loadWeather() {
-      try {
-        const [currentResponse, forecastResponse] = await Promise.all([
-          fetch(`https://api.openweathermap.org/data/2.5/weather?${params}`, { signal: controller.signal }),
-          fetch(`https://api.openweathermap.org/data/2.5/forecast?${params}`, { signal: controller.signal }),
-        ]);
-        if (!currentResponse.ok || !forecastResponse.ok) {
-          throw new Error(currentResponse.status === 401 || forecastResponse.status === 401
-            ? "OpenWeather rejected the API key. Check that it is active and correct."
-            : `OpenWeather request failed (${!currentResponse.ok ? currentResponse.status : forecastResponse.status}).`);
-        }
-        const [currentData, forecastData] = await Promise.all([
-          currentResponse.json() as Promise<OpenWeatherCurrent>,
-          forecastResponse.json() as Promise<OpenWeatherForecastResponse>,
-        ]);
-        if (controller.signal.aborted) return;
-        setCurrent(currentData);
-        setOpenWeatherForecast(forecastData.list.map(point => ({
-          forecast_for: new Date(point.dt * 1000).toISOString(),
-          rain_mm: point.rain?.["3h"] ?? 0,
-          rain_chance: Math.round(point.pop * 100),
-          temp_c: point.main.temp,
-          wind_kph: point.wind.speed * 3.6,
-          condition: point.weather[0]?.description ?? "Unknown",
-        })));
-      } catch (error) {
-        if (controller.signal.aborted) return;
-        setWeatherError(error instanceof Error ? error.message : "Unable to load OpenWeather data.");
-      } finally {
-        if (!controller.signal.aborted) setWeatherLoading(false);
-      }
-    }
-
-    void loadWeather();
-    return () => controller.abort();
-  }, []);
-
-  const now = new Date();
-  const upcoming = forecasts.filter(f => new Date(f.forecast_for) >= now);
-  const apiUpcoming = openWeatherForecast.filter(f => new Date(f.forecast_for) >= now);
-  const chartForecasts: Array<ForecastPoint | WeatherForecast> = apiUpcoming.length ? apiUpcoming.slice(0, 8) : upcoming.slice(0, 24);
+  const { current, forecast: openWeatherForecast, loading: weatherLoading, error: weatherError } = useOpenMeteo();
+  const apiUpcoming = openWeatherForecast.filter(f => new Date(f.forecast_for).getTime() >= Date.now());
+  const chartForecasts = apiUpcoming.slice(0, 24);
   const next24 = chartForecasts.map((f, i) => ({
     hour: i + 1,
     rain_mm: f.rain_mm ?? 0,
@@ -107,7 +20,7 @@ export default function Weather() {
   }));
 
   const byDay = new Map<string, { day: string; rain_mm: number; rain_chance: number; temps: number[]; condition: string | null }>();
-  (apiUpcoming.length ? apiUpcoming : upcoming).forEach(f => {
+  apiUpcoming.forEach(f => {
     const d = new Date(f.forecast_for);
     const key = d.toISOString().slice(0, 10);
     if (!byDay.has(key)) {
@@ -124,17 +37,18 @@ export default function Weather() {
     day.rain_chance = Math.max(day.rain_chance, f.rain_chance ?? 0);
     if (f.temp_c != null) day.temps.push(f.temp_c);
   });
-  const outlookDays = Array.from(byDay.values()).slice(0, apiUpcoming.length ? 5 : 7);
+  const outlookDays = Array.from(byDay.values()).slice(0, 7);
 
   return (
     <div className="space-y-6">
       <PageHeader
         code="04"
         title="Weather Forecast & AI Flood Prediction"
-        subtitle="Live atmospheric conditions for Pililla, fused with sensor data to predict flood risk."
+        subtitle="Current weather and hourly precipitation forecasts from Open-Meteo for Pililla, Rizal."
       />
 
-      <Panel label="LIVE OBSERVATION" title="Pililla, Rizal">
+      <p className="text-xs text-muted-foreground">Weather source: Open-Meteo · Forecasts are model estimates, not measured rainfall.</p>
+      <Panel label="CURRENT WEATHER · OPEN-METEO" title="Pililla, Rizal">
         {weatherLoading ? (
           <EmptyState icon={<CloudRain className="h-5 w-5" />} title="Loading live weather" />
         ) : weatherError ? (
@@ -162,8 +76,8 @@ export default function Weather() {
         ) : null}
       </Panel>
 
-      <Panel label={apiUpcoming.length ? "NEXT 24 HOURS · 3-HOUR INTERVALS" : "DATABASE FORECAST"} title="Rainfall Outlook">
-        {weatherLoading || forecastsLoading ? null : next24.length === 0 ? (
+      <Panel label="NEXT 24 HOURS · HOURLY FORECAST" title="Rainfall Outlook">
+        {weatherLoading ? null : next24.length === 0 ? (
           <EmptyState
             icon={<CloudRain className="h-5 w-5" />}
             title="No forecast data"
@@ -188,9 +102,9 @@ export default function Weather() {
         )}
       </Panel>
 
-      <Panel label="EXTENDED OUTLOOK" title={apiUpcoming.length ? "5-Day OpenWeather Forecast" : "Database Forecast"}>
+      <Panel label="EXTENDED OUTLOOK" title="7-Day Open-Meteo Forecast">
         {outlookDays.length === 0 ? (
-          <EmptyState title="No extended forecast" description="The weekly outlook is available when forecasts have been ingested into the system." />
+          <EmptyState title="No extended forecast" description="Open-Meteo forecast data is unavailable." />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
             {outlookDays.map((d, i) => {
