@@ -33,13 +33,13 @@ export interface MapCenter {
   occupancy?: number | null;
 }
 
-type LayerKey = "satellite" | "heatmap" | "barangays" | "centers" | "sensors";
+type LayerKey = "heatmap" | "barangays" | "centers" | "sensors";
 
 interface Props {
   defaultLayers?: Partial<Record<LayerKey, boolean>>;
   userLocation?: [number, number] | null; // [lng, lat] (kept for API compat)
   routes?: { coords: [number, number][]; color?: string; dashed?: boolean }[]; // coords as [lng, lat]
-  styleVariant?: "satellite" | "dark" | "terrain";
+  styleVariant?: "satellite" | "dark" | "terrain" | "streets";
   className?: string;
   barangays?: MapBarangay[];
   sensors?: MapSensor[];
@@ -58,6 +58,11 @@ const RISK_COLOR: Record<string, string> = {
 
 // Tile providers — all free, no key required
 const TILE_LAYERS = {
+  streets: {
+    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    attribution: "© OpenStreetMap contributors © CARTO",
+    maxZoom: 19,
+  },
   satellite: {
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     attribution: "Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
@@ -79,7 +84,7 @@ export default function GISMap({
   defaultLayers,
   userLocation,
   routes,
-  styleVariant = "satellite",
+  styleVariant = "streets",
   className,
   barangays = [],
   sensors = [],
@@ -96,8 +101,8 @@ export default function GISMap({
   const routeLayerRef = useRef<L.LayerGroup | null>(null);
   const userMarkerRef = useRef<L.Marker | null>(null);
 
+  const [baseMap, setBaseMap] = useState<"streets" | "satellite">("streets");
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
-    satellite: true,
     heatmap: true,
     barangays: true,
     centers: true,
@@ -150,14 +155,14 @@ export default function GISMap({
       map.removeLayer(tileRef.current);
       tileRef.current = null;
     }
-    const cfg = TILE_LAYERS[styleVariant];
+    const cfg = TILE_LAYERS[baseMap === "satellite" ? "satellite" : styleVariant];
     tileRef.current = L.tileLayer(cfg.url, {
       attribution: cfg.attribution,
       maxZoom: cfg.maxZoom,
       keepBuffer: 4,
       updateWhenIdle: true,
     }).addTo(map);
-  }, [styleVariant]);
+  }, [styleVariant, baseMap]);
 
   // Heatmap + barangay markers
   useEffect(() => {
@@ -309,6 +314,10 @@ export default function GISMap({
           <Layers className="h-3.5 w-3.5 text-primary" />
           <span className="mono-label">MAP LAYERS</span>
         </div>
+        <div className="flex gap-1 mb-3" role="group" aria-label="Base map">
+          <button type="button" onClick={() => setBaseMap("streets")} className={cn("flex-1 text-xs rounded border px-2 py-1", baseMap === "streets" ? "border-primary text-primary bg-primary/15" : "border-primary/20")}>Road map</button>
+          <button type="button" onClick={() => setBaseMap("satellite")} className={cn("flex-1 text-xs rounded border px-2 py-1", baseMap === "satellite" ? "border-primary text-primary bg-primary/15" : "border-primary/20")}>Satellite</button>
+        </div>
         <div className="space-y-1.5">
           <LayerToggle icon={<Droplets />} label="Flood Risk Heatmap" k="heatmap" layers={layers} setLayers={setLayers} />
           <LayerToggle icon={<MapPin />} label="Barangay Markers" k="barangays" layers={layers} setLayers={setLayers} />
@@ -316,7 +325,7 @@ export default function GISMap({
           <LayerToggle icon={<Radio />} label="Sensor Stations" k="sensors" layers={layers} setLayers={setLayers} />
         </div>
         <div className="mt-3 pt-3 border-t border-primary/15 mono-font text-[10px] text-muted-foreground">
-          Tiles: OSM / Esri · No API key required
+          Road map: CARTO / OSM · Satellite: Esri
         </div>
       </div>
 
