@@ -60,12 +60,26 @@ export default function GIS() {
         if (data.code !== "Ok" || !Array.isArray(coords) || coords.length < 2) {
           throw new Error("No drivable route found");
         }
+        const snapDistances = (data.waypoints ?? []).map((p: { distance?: number }) => p.distance ?? Infinity);
+        if (snapDistances.length !== 2 || snapDistances.some((d: number) => !Number.isFinite(d) || d > 150)) {
+          throw new Error("Location or evacuation center is too far from a mapped road. Check the center coordinates.");
+        }
         const valid = coords.filter((p: unknown): p is [number, number] =>
           Array.isArray(p) && p.length >= 2 &&
           Number.isFinite(p[0]) && Number.isFinite(p[1]) &&
           Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90
         );
         if (valid.length < 2) throw new Error("Invalid routing geometry");
+        // Reject discontinuous road geometries instead of drawing straight diagonals.
+        const radians = (deg: number) => deg * Math.PI / 180;
+        const hasGap = valid.slice(1).some(([lng2, lat2], i) => {
+          const [lng1, lat1] = valid[i];
+          const dLat = radians(lat2 - lat1);
+          const dLng = radians(lng2 - lng1);
+          const a = Math.sin(dLat / 2) ** 2 + Math.cos(radians(lat1)) * Math.cos(radians(lat2)) * Math.sin(dLng / 2) ** 2;
+          return 12742000 * Math.asin(Math.min(1, Math.sqrt(a))) > 1000;
+        });
+        if (hasGap) throw new Error("Routing geometry contains a gap. Refusing to display a misleading route.");
         setRouteCoords(valid);
         setRouteStatus(`Road route: ${(route.distance / 1000).toFixed(1)} km, approximately ${Math.round(route.duration / 60)} min by car. Check local flood and road conditions.`);
       })
