@@ -115,6 +115,9 @@ export default function GISMap({
       attributionControl: true,
     });
     mapRef.current = map;
+    const observer = new ResizeObserver(() => map.invalidateSize({ pan: false, debounceMoveend: true }));
+    observer.observe(containerRef.current);
+    const frame = requestAnimationFrame(() => map.invalidateSize({ pan: false }));
 
     barangayLayerRef.current = L.layerGroup().addTo(map);
     sensorLayerRef.current = L.layerGroup().addTo(map);
@@ -124,6 +127,8 @@ export default function GISMap({
     onReady?.(map);
 
     return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
       map.remove();
       mapRef.current = null;
       tileRef.current = null;
@@ -149,6 +154,8 @@ export default function GISMap({
     tileRef.current = L.tileLayer(cfg.url, {
       attribution: cfg.attribution,
       maxZoom: cfg.maxZoom,
+      keepBuffer: 4,
+      updateWhenIdle: true,
     }).addTo(map);
   }, [styleVariant]);
 
@@ -281,7 +288,8 @@ export default function GISMap({
     group.clearLayers();
     if (!routes) return;
     routes.forEach((r, i) => {
-      const latlngs = r.coords.map(([lng, lat]) => [lat, lng] as [number, number]);
+      const latlngs = r.coords.filter(([lng, lat]) => Number.isFinite(lng) && Number.isFinite(lat) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180).map(([lng, lat]) => [lat, lng] as [number, number]);
+      if (latlngs.length < 2) return;
       const line = L.polyline(latlngs, {
         color: r.color || "#00d4ff",
         weight: i === 0 ? 5 : 3,
