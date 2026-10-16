@@ -59,8 +59,8 @@ const RISK_COLOR: Record<string, string> = {
 // Tile providers — all free, no key required
 const TILE_LAYERS = {
   streets: {
-    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-    attribution: "© OpenStreetMap contributors © CARTO",
+    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: "© OpenStreetMap contributors",
     maxZoom: 19,
   },
   satellite: {
@@ -161,6 +161,7 @@ export default function GISMap({
       maxZoom: cfg.maxZoom,
       keepBuffer: 4,
       updateWhenIdle: true,
+      crossOrigin: true,
     }).addTo(map);
   }, [styleVariant, baseMap]);
 
@@ -325,7 +326,7 @@ export default function GISMap({
           <LayerToggle icon={<Radio />} label="Sensor Stations" k="sensors" layers={layers} setLayers={setLayers} />
         </div>
         <div className="mt-3 pt-3 border-t border-primary/15 mono-font text-[10px] text-muted-foreground">
-          Road map: CARTO / OSM · Satellite: Esri
+          Road map: OpenStreetMap · Satellite: Esri
         </div>
       </div>
 
