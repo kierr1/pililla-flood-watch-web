@@ -1,9 +1,9 @@
-import { CloudRain, Wind, Droplets, Sprout, Satellite, Construction, Shield, AlertTriangle, Map as MapIcon, Inbox } from "lucide-react";
+import { CloudRain, Wind, Droplets, Shield, AlertTriangle, Map as MapIcon, Inbox } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Panel, MissionCard, RiskBadge, PageHeader } from "@/components/mission/Panel";
 import { EmptyState } from "@/components/mission/EmptyState";
 import {
-  useBarangays, useSensorStations, useEvacuationCenters, useAlerts, useFloodReadings,
+  useBarangays, useSensorStations, useEvacuationCenters, useAlerts, useFloodReadings, useOpenWeatherRainfall,
 } from "@/hooks/useData";
 import { predictFlood, type FloodFeatures } from "@/lib/floodModel";
 import {
@@ -27,6 +27,7 @@ export default function Dashboard() {
   const { data: centers } = useEvacuationCenters();
   const { data: alerts } = useAlerts();
   const { data: readings } = useFloodReadings();
+  const { rainfall: forecastRainfall, error: weatherRainError } = useOpenWeatherRainfall();
 
   const recent = readings.slice(0, 24);
   const avg = (arr: (number | null | undefined)[]) => {
@@ -111,14 +112,13 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Telemetry icon={<CloudRain className="h-4 w-4" />} label="RAINFALL (avg)" value={hasReadings ? features.rainfall_mm.toFixed(1) : "—"} unit="mm" />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Telemetry icon={<CloudRain className="h-4 w-4" />} label="RAINFALL (avg, forecast 3h)" value={forecastRainfall !== null ? forecastRainfall.toFixed(1) : "—"} unit="mm" />
         <Telemetry icon={<Droplets className="h-4 w-4" />} label="WATER LEVEL" value={hasReadings ? features.water_level_m.toFixed(2) : "—"} unit="m" />
         <Telemetry icon={<Wind className="h-4 w-4" />} label="WIND SPEED" value={hasReadings ? features.wind_speed.toFixed(2) : "—"} unit="m/s" />
-        <Telemetry icon={<Sprout className="h-4 w-4" />} label="SOIL MOISTURE" value={hasReadings ? features.soil_moisture_percent.toFixed(0) : "—"} unit="%" />
-        <Telemetry icon={<Satellite className="h-4 w-4" />} label="SAT. NDWI" value="—" />
-        <Telemetry icon={<Construction className="h-4 w-4" />} label="ROAD CONDITION" value="—" unit="/ 100" />
       </div>
+
+      {weatherRainError && <p className="text-xs text-muted-foreground">OpenWeather rainfall forecast: {weatherRainError}</p>}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <Panel
