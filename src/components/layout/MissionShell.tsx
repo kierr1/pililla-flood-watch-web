@@ -16,7 +16,7 @@ const NAV = [
   { to: "/weather", label: "Weather & Forecast", icon: CloudRain, code: "04" },
   { to: "/centers", label: "Evacuation Centers", icon: Building2, code: "05" },
   { to: "/alerts", label: "Alert System", icon: Bell, code: "06" },
-  { to: "/admin", label: "Mission Control", icon: Shield, code: "07" },
+  { to: "/admin", label: "Mission Control", icon: Shield, code: "07", adminOnly: true },
   { to: "/analytics", label: "Data Visualization", icon: BarChart3, code: "08" },
   { to: "/admin/users", label: "Admin Panel", icon: Users, code: "09", adminOnly: true },
 ];
@@ -95,7 +95,7 @@ export default function MissionShell() {
               <NavLink
                 key={item.to}
                 to={item.to}
-                end={item.to === "/"}
+                end
                 className={({ isActive }) =>
                   cn(
                     "group flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-all relative overflow-hidden",
