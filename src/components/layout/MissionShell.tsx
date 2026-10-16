@@ -6,6 +6,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import StatusBar from "./StatusBar";
+import { supabase } from "@/integrations/supabase/client";
 import AlertBanner from "./AlertBanner";
 
 const NAV = [
@@ -24,6 +25,43 @@ export default function MissionShell() {
   const location = useLocation();
   const { isAdmin } = useAuth();
   const [navOpen, setNavOpen] = useState(false);
+  const [sensorsOnline, setSensorsOnline] = useState(false);
+  const [lastTelemetryAt, setLastTelemetryAt] = useState<string | null>(null);
+
+  // The Raspberry Pi normally sends data every 30 minutes.
+  // Treat a missed window after 45 minutes as offline.
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("flood_readings")
+          .select("recorded_at")
+          .order("recorded_at", { ascending: false })
+          .limit(1);
+        if (!active) return;
+        if (error) throw error;
+        const latest = data?.[0]?.recorded_at ?? null;
+        const age = latest ? Date.now() - new Date(latest).getTime() : Infinity;
+        setLastTelemetryAt(latest);
+        setSensorsOnline(age >= 0 && age <= 45 * 60 * 1000);
+      } catch {
+        if (active) {
+          setSensorsOnline(false);
+          setLastTelemetryAt(null);
+        }
+      }
+    };
+    void refresh();
+    const timer = setInterval(() => void refresh(), 30_000);
+    const onVisibility = () => { if (document.visibilityState === "visible") void refresh(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
 
   // Close mobile nav on route change
   useEffect(() => { setNavOpen(false); }, [location.pathname]);
@@ -85,10 +123,10 @@ export default function MissionShell() {
                 <span className="mono-label">SYSTEM STATUS</span>
               </div>
               <div className="space-y-1.5 text-xs">
-                <Stat label="Sensors online" value="5/6" tone="ok" />
+                <Stat label="Sensors online" value={sensorsOnline ? "3/3" : "0/3"} tone={sensorsOnline ? "ok" : "crit"} />
                 <Stat label="ML model" value="v2.1.3" tone="ok" />
                 <Stat label="Sat. uplink" value="STABLE" tone="ok" />
-                <Stat label="Last sync" value="0:42s" tone="ok" />
+                <Stat label="Last sync" value={lastTelemetryAt ? new Date(lastTelemetryAt).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" }) : "No data"} tone={sensorsOnline ? "ok" : "crit"} />
               </div>
             </div>
           </nav>
