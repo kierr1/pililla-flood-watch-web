@@ -3,8 +3,9 @@ import { Link } from "react-router-dom";
 import { Panel, MissionCard, RiskBadge, PageHeader } from "@/components/mission/Panel";
 import { EmptyState } from "@/components/mission/EmptyState";
 import {
-  useBarangays, useSensorStations, useEvacuationCenters, useAlerts, useFloodReadings, useOpenWeatherRainfall,
+  useBarangays, useSensorStations, useEvacuationCenters, useAlerts, useFloodReadings,
 } from "@/hooks/useData";
+import { useOpenMeteo } from "@/hooks/useOpenMeteo";
 import { predictFlood, type FloodFeatures } from "@/lib/floodModel";
 import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -27,7 +28,7 @@ export default function Dashboard() {
   const { data: centers } = useEvacuationCenters();
   const { data: alerts } = useAlerts();
   const { data: readings } = useFloodReadings();
-  const { rainfall: forecastRainfall, error: weatherRainError } = useOpenWeatherRainfall();
+  const { averageRainfall: forecastRainfall, error: weatherRainError } = useOpenMeteo();
 
   const recent = readings.slice(0, 24);
   const avg = (arr: (number | null | undefined)[]) => {
@@ -113,12 +114,12 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Telemetry icon={<CloudRain className="h-4 w-4" />} label="RAINFALL (avg, forecast 3h)" value={forecastRainfall !== null ? forecastRainfall.toFixed(1) : "—"} unit="mm" />
+        <Telemetry icon={<CloudRain className="h-4 w-4" />} label="RAINFALL (avg, forecast 1h)" value={forecastRainfall !== null ? forecastRainfall.toFixed(1) : "—"} unit="mm" />
         <Telemetry icon={<Droplets className="h-4 w-4" />} label="WATER LEVEL" value={hasReadings ? features.water_level_m.toFixed(2) : "—"} unit="m" />
         <Telemetry icon={<Wind className="h-4 w-4" />} label="WIND SPEED" value={hasReadings ? features.wind_speed.toFixed(2) : "—"} unit="m/s" />
       </div>
 
-      {weatherRainError && <p className="text-xs text-muted-foreground">OpenWeather rainfall forecast: {weatherRainError}</p>}
+      {weatherRainError && <p className="text-xs text-muted-foreground">Open-Meteo rainfall forecast: {weatherRainError}</p>}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <Panel
