@@ -50,7 +50,7 @@ export default function Weather() {
   useEffect(() => {
     const apiKey = import.meta.env.OPENWEATHER_API_KEY?.trim();
     if (!apiKey) {
-      setWeatherError("Add OPENWEATHER_API_KEY to your local .env file, then restart the dev server.");
+      setWeatherError("OpenWeather is not configured. Set OPENWEATHER_API_KEY in the Render Environment settings and redeploy.");
       setWeatherLoading(false);
       return;
     }
@@ -107,7 +107,7 @@ export default function Weather() {
   }));
 
   const byDay = new Map<string, { day: string; rain_mm: number; rain_chance: number; temps: number[]; condition: string | null }>();
-  upcoming.forEach(f => {
+  (apiUpcoming.length ? apiUpcoming : upcoming).forEach(f => {
     const d = new Date(f.forecast_for);
     const key = d.toISOString().slice(0, 10);
     if (!byDay.has(key)) {
@@ -124,7 +124,7 @@ export default function Weather() {
     day.rain_chance = Math.max(day.rain_chance, f.rain_chance ?? 0);
     if (f.temp_c != null) day.temps.push(f.temp_c);
   });
-  const days7 = Array.from(byDay.values()).slice(0, 7);
+  const outlookDays = Array.from(byDay.values()).slice(0, apiUpcoming.length ? 5 : 7);
 
   return (
     <div className="space-y-6">
@@ -162,7 +162,7 @@ export default function Weather() {
         ) : null}
       </Panel>
 
-      <Panel label={apiUpcoming.length ? "5-DAY FORECAST · 3-HOUR INTERVALS" : "24-HOUR FORECAST"} title="Rainfall Outlook">
+      <Panel label={apiUpcoming.length ? "NEXT 24 HOURS · 3-HOUR INTERVALS" : "DATABASE FORECAST"} title="Rainfall Outlook">
         {weatherLoading || forecastsLoading ? null : next24.length === 0 ? (
           <EmptyState
             icon={<CloudRain className="h-5 w-5" />}
@@ -188,12 +188,12 @@ export default function Weather() {
         )}
       </Panel>
 
-      <Panel label="EXTENDED OUTLOOK" title="7-Day Forecast">
-        {days7.length === 0 ? (
+      <Panel label="EXTENDED OUTLOOK" title={apiUpcoming.length ? "5-Day OpenWeather Forecast" : "Database Forecast"}>
+        {outlookDays.length === 0 ? (
           <EmptyState title="No extended forecast" description="The weekly outlook is available when forecasts have been ingested into the system." />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-            {days7.map((d, i) => {
+            {outlookDays.map((d, i) => {
               const high = d.temps.length ? Math.round(Math.max(...d.temps)) : null;
               const low = d.temps.length ? Math.round(Math.min(...d.temps)) : null;
               const Icon = d.rain_mm > 40 ? CloudLightning : d.rain_mm > 20 ? CloudRain : d.rain_mm > 10 ? CloudDrizzle : Cloud;
