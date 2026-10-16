@@ -150,7 +150,7 @@ export default function AdminUsers() {
   }, [profiles]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0">
       <PageHeader
         code="0A"
         title="Admin Panel · User Management"
@@ -213,35 +213,24 @@ export default function AdminUsers() {
       <Panel
         label="ROSTER"
         title="Operators & Clearance"
-        action={
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="h-3.5 w-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="search"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search email, name, agency…"
-                className="pl-7 pr-3 py-1.5 rounded bg-surface-0 border border-primary/20 focus:border-primary/60 focus:outline-none text-xs mono-font text-foreground placeholder:text-muted-foreground/60 w-56"
-              />
-            </div>
-            <div className="flex gap-1 p-0.5 rounded bg-surface-2 border border-primary/15">
-              {(["all", "admins", "users"] as Filter[]).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={cn(
-                    "mono-font text-[10px] px-2.5 py-1 rounded uppercase",
-                    filter === f ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-          </div>
-        }
+
       >
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5 min-w-0">
+          <div className="relative flex-1 min-w-0">
+            <Search className="h-3.5 w-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input type="search" value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search email, name, agency…"
+              aria-label="Search operators"
+              className="w-full pl-8 pr-3 py-2 rounded bg-surface-0 border border-primary/20 focus:border-primary/60 focus:outline-none text-xs mono-font text-foreground placeholder:text-muted-foreground/60" />
+          </div>
+          <div className="flex w-full sm:w-auto gap-1 p-0.5 rounded bg-surface-2 border border-primary/15">
+            {(["all", "admins", "users"] as Filter[]).map(f => (
+              <button key={f} type="button" onClick={() => setFilter(f)}
+                className={cn("flex-1 sm:flex-none mono-font text-[10px] px-3 py-2 rounded uppercase",
+                  filter === f ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground")}>{f}</button>
+            ))}
+          </div>
+        </div>
         {loading ? (
           <div className="py-10 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /></div>
         ) : filtered.length === 0 ? (
@@ -251,8 +240,8 @@ export default function AdminUsers() {
             description={search ? "Try a different search term or filter." : "Operators appear here after their first sign-in."}
           />
         ) : (
-          <div className="overflow-x-auto -mx-2">
-            <table className="w-full text-sm">
+          <div className="w-full max-w-full overflow-x-auto pb-2" role="region" aria-label="Operator table" tabIndex={0}>
+            <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="text-left mono-label border-b border-primary/15">
                   <th className="py-2 px-2">OPERATOR</th>
@@ -285,7 +274,7 @@ export default function AdminUsers() {
                           </div>
                         </div>
                       </td>
-                      <td className="py-2.5 px-2 mono-font text-xs text-foreground/90">{p.email ?? "—"}</td>
+                      <td className="py-2.5 px-2 mono-font text-xs text-foreground/90 max-w-[190px] break-all">{p.email ?? "—"}</td>
                       <td className="py-2.5 px-2 hidden md:table-cell text-xs text-muted-foreground">{p.agency ?? "—"}</td>
                       <td className="py-2.5 px-2">
                         <div className="flex flex-wrap gap-1">
