@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { Panel, PageHeader } from "@/components/mission/Panel";
 import { EmptyState } from "@/components/mission/EmptyState";
 import GISMap from "@/components/map/GISMap";
-import { PILILLA_CENTER, distanceKm } from "@/data/pililla";
+import { distanceKm } from "@/data/pililla";
 import { useEvacuationCenters, useBarangays, useSensorStations } from "@/hooks/useData";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +14,9 @@ export default function Evacuation() {
   const [user, setUser] = useState<LngLat | null>(null);
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [roadRoutes, setRoadRoutes] = useState<{ coords: LngLat[]; color: string; dashed?: boolean }[]>([]);
+  const [roadStats, setRoadStats] = useState<{ distance: number; duration: number } | null>(null);
+  const [routingStatus, setRoutingStatus] = useState("Select an evacuation center and locate yourself to calculate a road route.");
 
   const { data: centers, loading: centersLoading } = useEvacuationCenters();
   const { data: barangays } = useBarangays();
@@ -40,27 +43,71 @@ export default function Evacuation() {
     setLocating(true);
     setError(null);
     if (!navigator.geolocation) {
-      setError("Geolocation unavailable. Pin will use Pililla town center.");
-      setUser(PILILLA_CENTER);
+      setError("Geolocation unavailable. Allow location access to calculate a route.");
+      setUser(null);
       setLocating(false);
       return;
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => { setUser([pos.coords.longitude, pos.coords.latitude]); setLocating(false); },
-      () => { setError("Location denied. Using Pililla town center as origin."); setUser(PILILLA_CENTER); setLocating(false); },
+      () => { setError("Location denied. Enable precise location access to calculate a road route."); setUser(null); setLocating(false); },
       { timeout: 8000, enableHighAccuracy: true },
     );
   }
 
   const target = candidates.find(c => c.id === selected);
 
-  const routes = useMemo(() => {
-    if (!user || !target) return [];
-    return [
-      { coords: makeRoute(user, target.coords, 0.0006), color: "#00ffd4" },
-      { coords: makeRoute(user, target.coords, -0.0014, true), color: "#ffcc33", dashed: true },
-    ];
-  }, [user, target]);
+  // Request genuine road geometries. Do not construct synthetic zigzag routes.
+  const targetLng = target?.coords[0];
+  const targetLat = target?.coords[1];
+  useEffect(() => {
+    setRoadRoutes([]);
+    setRoadStats(null);
+    if (!user || targetLng == null || targetLat == null) return;
+    const controller = new AbortController();
+    setRoutingStatus("Calculating route on mapped roads...");
+    const url = `https://router.project-osrm.org/route/v1/driving/${user[0]},${user[1]};${targetLng},${targetLat}?overview=full&geometries=geojson&alternatives=true&steps=false`;
+    fetch(url, { signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) throw new Error("Road routing service is unavailable.");
+        return response.json();
+      })
+      .then(data => {
+        if (controller.signal.aborted) return;
+        if (data.code !== "Ok" || !Array.isArray(data.routes) || !data.routes.length) {
+          throw new Error("No drivable road route found.");
+        }
+        const waypointDistances: number[] = (data.waypoints ?? []).map((p: {distance?: number}) => p.distance ?? Infinity);
+        if (waypointDistances.length !== 2 || waypointDistances.some(d => !Number.isFinite(d) || d > 150)) {
+          throw new Error("Origin or shelter is over 150 meters from a mapped road. Verify GPS and shelter coordinates.");
+        }
+        const usable = data.routes.slice(0, 2).map((route: {geometry?: {coordinates?: unknown}; distance: number; duration: number}, index: number) => {
+          const coords = route.geometry?.coordinates;
+          if (!Array.isArray(coords)) return null;
+          const points: LngLat[] = coords.filter((p: unknown): p is LngLat =>
+            Array.isArray(p) && p.length >= 2 && Number.isFinite(p[0]) && Number.isFinite(p[1])
+            && Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90
+          );
+          if (points.length < 2) return null;
+          // A disconnected route should never be shown as a plausible evacuation path.
+          const gap = points.slice(1).some((point, i) => distanceKm(points[i], point) > 1);
+          if (gap) return null;
+          return { coords: points, color: index === 0 ? "#00ffd4" : "#ffcc33", dashed: index > 0,
+            distance: route.distance, duration: route.duration };
+        }).filter((route: unknown): route is {coords: LngLat[]; color: string; dashed: boolean; distance: number; duration: number} => route !== null);
+        if (!usable.length) throw new Error("No reliable road geometry returned.");
+        setRoadRoutes(usable.map(({ coords, color, dashed }) => ({ coords, color, dashed })));
+        setRoadStats({ distance: usable[0].distance / 1000, duration: usable[0].duration / 60 });
+        setRoutingStatus(`${usable.length} mapped driving route(s) found. Road and flood safety have not been verified.`);
+      })
+      .catch(err => {
+        if (controller.signal.aborted) return;
+        setRoadRoutes([]);
+        setRoadStats(null);
+        setRoutingStatus(err instanceof Error ? err.message : "Road routing failed.");
+      });
+    return () => controller.abort();
+  }, [user, targetLng, targetLat]);
 
   const mapBarangays = barangays.filter(b => b.lat && b.lng).map(b => ({
     id: b.id, name: b.name, lat: Number(b.lat), lng: Number(b.lng),
@@ -76,8 +123,8 @@ export default function Evacuation() {
     <div className="space-y-6">
       <PageHeader
         code="03"
-        title="Evacuation Route Optimization"
-        subtitle="Detect your location, find the nearest evacuation center, and generate primary + alternative routes."
+        title="Evacuation Road Routing"
+        subtitle="Find nearby evacuation centers and request real driving routes. Check flood conditions before travel."
         action={
           <button
             onClick={locate}
@@ -85,19 +132,20 @@ export default function Evacuation() {
             className="inline-flex items-center gap-2 px-5 py-3 rounded bg-gradient-primary text-primary-foreground font-bold text-sm shadow-glow hover:scale-105 transition-transform disabled:opacity-60"
           >
             <Locate className={cn("h-4 w-4", locating && "animate-spin")} />
-            {locating ? "ACQUIRING GPS..." : user ? "RECALCULATE ROUTE" : "FIND SAFEST ROUTE NOW"}
+            {locating ? "ACQUIRING GPS..." : user ? "RECALCULATE ROUTE" : "FIND ROAD ROUTE"}
           </button>
         }
       />
 
       {error && <div className="glass-panel border-risk-moderate/40 px-4 py-2.5 text-sm text-risk-moderate">{error}</div>}
+      <p className="text-xs text-muted-foreground" role="status">{routingStatus}</p>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2">
           <GISMap
             className="h-[560px]"
             userLocation={user}
-            routes={routes}
+            routes={roadRoutes}
             barangays={mapBarangays}
             sensors={mapSensors}
             centers={mapCenters}
@@ -118,12 +166,12 @@ export default function Evacuation() {
               <EmptyState
                 icon={<Compass className="h-5 w-5" />}
                 title="No origin set"
-                description='Tap "Find Safest Route Now" to detect your position via GPS or use Pililla town center as fallback.'
+                description='Tap "Find Safest Route Now" to detect your position via GPS and allow location access.'
               />
             ) : !target ? (
               <EmptyState icon={<Building2 className="h-5 w-5" />} title="No center selected" description="Pick an evacuation center below." />
             ) : (
-              <RouteBriefing target={target} routesCount={routes.length} />
+              <RouteBriefing target={target} routesCount={roadRoutes.length} roadStats={roadStats} />
             )}
           </Panel>
 
@@ -171,13 +219,12 @@ export default function Evacuation() {
   );
 }
 
-function RouteBriefing({ target, routesCount }: { target: { coords: LngLat; distance_km: number; capacity: number | null; occupancy: number | null }; routesCount: number }) {
-  const eta = Math.max(1, Math.round(target.distance_km * 4));
+function RouteBriefing({ target, routesCount, roadStats }: { target: { coords: LngLat; distance_km: number; capacity: number | null; occupancy: number | null }; routesCount: number; roadStats: { distance: number; duration: number } | null }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <Stat icon={<RouteIcon className="h-4 w-4" />} label="Distance" value={`${target.distance_km.toFixed(2)} km`} />
-        <Stat icon={<Clock className="h-4 w-4" />} label="Est. Time" value={`${eta} min`} />
+        <Stat icon={<RouteIcon className="h-4 w-4" />} label="Distance" value={roadStats ? `${roadStats.distance.toFixed(2)} km` : "Pending"} />
+        <Stat icon={<Clock className="h-4 w-4" />} label="Est. Time" value={roadStats ? `${Math.round(roadStats.duration)} min` : "Pending"} />
         <Stat icon={<Navigation className="h-4 w-4" />} label="Routes" value={`${routesCount} avail.`} />
         <Stat icon={<Building2 className="h-4 w-4" />} label="Capacity" value={`${target.occupancy ?? 0}/${target.capacity ?? "—"}`} />
       </div>
@@ -186,13 +233,13 @@ function RouteBriefing({ target, routesCount }: { target: { coords: LngLat; dist
         <div className="flex items-center gap-2 text-xs">
           <span className="h-1.5 w-6 rounded" style={{ background: "#00ffd4", boxShadow: "0 0 8px #00ffd4" }} />
           <span className="font-semibold">PRIMARY</span>
-          <span className="mono-label ml-auto">SAFEST</span>
+          <span className="mono-label ml-auto">ROAD ROUTE</span>
         </div>
-        <div className="flex items-center gap-2 text-xs">
+        {routesCount > 1 && <div className="flex items-center gap-2 text-xs">
           <span className="h-1.5 w-6 rounded border-dashed border-2" style={{ borderColor: "#ffcc33" }} />
           <span className="font-semibold">ALTERNATIVE</span>
-          <span className="mono-label ml-auto">SHORTER</span>
-        </div>
+          <span className="mono-label ml-auto">IF AVAILABLE</span>
+        </div>}
       </div>
 
       <a
@@ -215,17 +262,3 @@ function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; va
   );
 }
 
-function makeRoute(a: LngLat, b: LngLat, offset: number, detour = false): LngLat[] {
-  const mid: LngLat = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-  const dx = b[0] - a[0];
-  const dy = b[1] - a[1];
-  const len = Math.hypot(dx, dy) || 1;
-  const px = -dy / len * offset * 50;
-  const py = dx / len * offset * 50;
-  const m1: LngLat = [a[0] + dx * 0.3 + px, a[1] + dy * 0.3 + py];
-  const m2: LngLat = [a[0] + dx * 0.7 + px, a[1] + dy * 0.7 + py];
-  if (detour) {
-    return [a, m1, [mid[0] + px * 1.6, mid[1] + py * 1.6], m2, b];
-  }
-  return [a, m1, mid, m2, b];
-}
