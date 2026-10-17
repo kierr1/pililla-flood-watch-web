@@ -25,35 +25,44 @@ export default function MissionShell() {
   const location = useLocation();
   const { isAdmin } = useAuth();
   const [navOpen, setNavOpen] = useState(false);
-  const [sensorsOnline, setSensorsOnline] = useState(false);
+  const [deviceHealth, setDeviceHealth] = useState<Record<string, boolean>>({
+    wind: false, water_level: false, camera: false,
+  });
   const [lastTelemetryAt, setLastTelemetryAt] = useState<string | null>(null);
+  const deviceCount = Object.values(deviceHealth).filter(Boolean).length;
 
-  // The Raspberry Pi normally sends data every 30 minutes.
-  // Treat a missed window after 45 minutes as offline.
+  // Device checks are reported by the Pi, not inferred from regular readings.
+  // A report expires after 90 seconds so powering off the Pi goes offline.
   useEffect(() => {
     let active = true;
     const refresh = async () => {
       try {
         const { data, error } = await supabase
-          .from("flood_readings")
-          .select("recorded_at")
-          .order("recorded_at", { ascending: false })
-          .limit(1);
-        if (!active) return;
+          .from("device_health" as any)
+          .select("device_id,connected,checked_at");
         if (error) throw error;
-        const latest = data?.[0]?.recorded_at ?? null;
-        const age = latest ? Date.now() - new Date(latest).getTime() : Infinity;
-        setLastTelemetryAt(latest);
-        setSensorsOnline(age >= 0 && age <= 45 * 60 * 1000);
+        if (!active) return;
+        const now = Date.now();
+        const next: Record<string, boolean> = { wind: false, water_level: false, camera: false };
+        let mostRecent = 0;
+        for (const row of (data ?? []) as unknown as Array<{device_id: string; connected: boolean; checked_at: string}>) {
+          const checked = new Date(row.checked_at).getTime();
+          if (Object.prototype.hasOwnProperty.call(next, row.device_id) && Number.isFinite(checked)) {
+            next[row.device_id] = row.connected === true && checked <= now + 10000 && now - checked < 90000;
+            mostRecent = Math.max(mostRecent, checked);
+          }
+        }
+        setDeviceHealth(next);
+        setLastTelemetryAt(mostRecent ? new Date(mostRecent).toISOString() : null);
       } catch {
         if (active) {
-          setSensorsOnline(false);
+          setDeviceHealth({ wind: false, water_level: false, camera: false });
           setLastTelemetryAt(null);
         }
       }
     };
     void refresh();
-    const timer = setInterval(() => void refresh(), 30_000);
+    const timer = setInterval(() => void refresh(), 15000);
     const onVisibility = () => { if (document.visibilityState === "visible") void refresh(); };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
@@ -123,10 +132,10 @@ export default function MissionShell() {
                 <span className="mono-label">SYSTEM STATUS</span>
               </div>
               <div className="space-y-1.5 text-xs">
-                <Stat label="Sensors online" value={sensorsOnline ? "3/3" : "0/3"} tone={sensorsOnline ? "ok" : "crit"} />
+                <Stat label="Devices online" value={`${deviceCount}/3`} tone={deviceCount === 3 ? "ok" : deviceCount ? "warn" : "crit"} />
                 <Stat label="ML model" value="v2.1.3" tone="ok" />
                 <Stat label="Sat. uplink" value="STABLE" tone="ok" />
-                <Stat label="Last sync" value={lastTelemetryAt ? new Date(lastTelemetryAt).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" }) : "No data"} tone={sensorsOnline ? "ok" : "crit"} />
+                <Stat label="Last health check" value={lastTelemetryAt ? new Date(lastTelemetryAt).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" }) : "No data"} tone={deviceCount === 3 ? "ok" : "crit"} />
               </div>
             </div>
           </nav>
