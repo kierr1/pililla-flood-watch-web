@@ -98,7 +98,7 @@ function useTable<T>(table: string, orderBy?: { column: string; ascending?: bool
 export const useBarangays         = () => useTable<Barangay>("barangays", { column: "name" });
 export const useSensorStations    = () => useTable<SensorStation>("sensor_stations", { column: "name" });
 export const useEvacuationCenters = () => useTable<EvacuationCenter>("evacuation_centers", { column: "name" });
-export const useAlerts            = () => useTable<Alert>("alerts", { column: "issued_at", ascending: false });
+export const useAlerts            = () => useTable<Alert>("alerts", { column: "issued_at", ascending: false }, 5000);
 export const useWeatherForecasts  = () => useTable<WeatherForecast>("weather_forecasts", { column: "forecast_for" });
 export const useFloodReadings     = () => useTable<FloodReading>("flood_readings", { column: "recorded_at", ascending: false }, 15000);
 
