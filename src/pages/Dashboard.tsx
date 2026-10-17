@@ -23,6 +23,17 @@ const chartTooltip = {
 
 const RISK_RANK: Record<string, number> = { critical: 4, high: 3, moderate: 2, low: 1 };
 
+// Provisional site-specific trigger bands; not official flood warnings.
+// Water level means height above the local datum, not ultrasonic air gap.
+type SensorRisk = "low" | "moderate" | "high" | "critical";
+function sensorFloodAlert(water: number | null | undefined, wind: number | null | undefined): SensorRisk | null {
+  if (water == null && wind == null) return null;
+  const waterRank = water == null ? 0 : water >= 1.20 ? 4 : water >= 0.75 ? 3 : water >= 0.30 ? 2 : 1;
+  // Wind bands (m/s) are provisional operational thresholds, not calibrated forecasts.
+  const windRank = wind == null ? 0 : wind >= 24.5 ? 4 : wind >= 17.2 ? 3 : wind >= 10.8 ? 2 : 1;
+  return (["low", "moderate", "high", "critical"] as const)[Math.max(waterRank, windRank) - 1];
+}
+
 export default function Dashboard() {
   const { data: barangays } = useBarangays();
   const { data: sensors } = useSensorStations();
@@ -65,7 +76,8 @@ export default function Dashboard() {
   const criticalAlerts = alerts.filter(a => a.level === "critical").length;
   const highAlerts = alerts.filter(a => a.level === "high").length;
 
-  const topAlertLevel = alerts[0]?.level as "low" | "moderate" | "high" | "critical" | undefined;
+  const freshLive = !!liveReading && Number.isFinite(Date.parse(liveReading.updated_at)) && (Date.now() - Date.parse(liveReading.updated_at)) < 90000 && (Date.now() - Date.parse(liveReading.updated_at)) > -10000;
+  const sensorRisk = freshLive ? sensorFloodAlert(liveReading?.water_level_m, liveReading?.wind_speed) : null;
 
   return (
     <div className="space-y-6">
@@ -85,12 +97,11 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MissionCard
-          label="FLOOD RISK INDEX"
-          value={pred ? pred.risk_score : "—"}
-          unit={pred ? "/ 100" : undefined}
-          tone={pred?.risk_level ?? "low"}
+          label="FLOOD RISK ALERT"
+          value={sensorRisk ? sensorRisk.toUpperCase() : "—"}
+          tone={sensorRisk ?? "default"}
           icon={<AlertTriangle className="h-5 w-5" />}
-          sub={pred ? <RiskBadge level={pred.risk_level} /> : <span className="mono-label">No readings yet</span>}
+          sub={sensorRisk ? <span className="mono-font">Live wind + water triggers · provisional</span> : <span className="mono-label">Awaiting fresh sensor data</span>}
         />
         <MissionCard
           label="ACTIVE ALERTS"
@@ -121,7 +132,7 @@ export default function Dashboard() {
         <Telemetry icon={<Wind className="h-4 w-4" />} label="WIND SPEED · LIVE" value={liveReading?.wind_speed != null ? liveReading.wind_speed.toFixed(2) : "—"} unit="m/s" />
       </div>
 
-      <p className="mono-font text-[11px] text-muted-foreground">Live sensor updates every 20 seconds from the Raspberry Pi. {liveReading ? `Last update: ${new Date(liveReading.updated_at).toLocaleTimeString("en-PH")}` : liveUpdated ? "Live telemetry is stale/offline" : "Awaiting live telemetry"}{liveError ? ` · ${liveError}` : ""}. Historical charts and Data Visualization use 30-minute saved readings.</p>
+      <p className="mono-font text-[11px] text-muted-foreground">Live sensor updates every 20 seconds from the Raspberry Pi. Flood Risk Alert uses provisional 5-ft datum thresholds (water 0.30/0.75/1.20 m; wind 10.8/17.2/24.5 m/s), takes the higher risk, and is not an official warning. {liveReading ? `Last update: ${new Date(liveReading.updated_at).toLocaleTimeString("en-PH")}` : liveUpdated ? "Live telemetry is stale/offline" : "Awaiting live telemetry"}{liveError ? ` · ${liveError}` : ""}. Historical charts and Data Visualization use 30-minute saved readings.</p>
       {weatherRainError && <p className="text-xs text-muted-foreground">Open-Meteo rainfall forecast: {weatherRainError}</p>}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
