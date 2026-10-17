@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Bell, BellRing, Loader2, Trash2, X, VideoOff } from "lucide-react";
+import { Bell, BellRing, Loader2, Trash2, X } from "lucide-react";
+import LiveCameraPlayer from "@/components/mission/LiveCameraPlayer";
 import { Panel, PageHeader, RiskBadge } from "@/components/mission/Panel";
 import { EmptyState } from "@/components/mission/EmptyState";
 import { useAlerts, type Alert } from "@/hooks/useData";
@@ -128,27 +129,7 @@ export default function Alerts() {
       </Panel>
 
       <Panel label="CAMERA MONITORING" title="Live Camera View">
-        {import.meta.env.VITE_CAMERA_STREAM_URL ? (
-          <div className="mx-auto max-w-4xl overflow-hidden rounded border border-primary/20 bg-black">
-            <iframe
-              src={import.meta.env.VITE_CAMERA_STREAM_URL}
-              title="Live Raspberry Pi camera feed"
-              className="aspect-video w-full border-0"
-              allow="autoplay; fullscreen; picture-in-picture"
-              allowFullScreen
-              referrerPolicy="no-referrer"
-            />
-          </div>
-        ) : (
-          <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded border border-primary/20 bg-black/70 p-6 text-center">
-            <VideoOff className="h-9 w-9 text-muted-foreground" />
-            <p className="text-sm font-semibold text-foreground">Camera stream not configured</p>
-            <p className="max-w-lg text-xs text-muted-foreground">
-              Connect a live video stream from your Raspberry Pi to display it here.
-              Scheduled 30-minute image captures are separate and unchanged.
-            </p>
-          </div>
-        )}
+        <LiveCameraPlayer />
       </Panel>
 
       <AlertDialog open={!!alertToManage} onOpenChange={open => !open && !saving && setAlertToManage(null)}>
