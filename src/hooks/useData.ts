@@ -54,26 +54,43 @@ export interface WeatherForecast {
   condition: string | null;
 }
 
-function useTable<T>(table: string, orderBy?: { column: string; ascending?: boolean }) {
+function useTable<T>(table: string, orderBy?: { column: string; ascending?: boolean }, refreshMs?: number) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    (async () => {
-      setLoading(true);
-      let q = supabase.from(table as any).select("*");
-      if (orderBy) q = q.order(orderBy.column, { ascending: orderBy.ascending ?? true });
-      const { data: rows, error: err } = await q;
-      if (!active) return;
-      if (err) setError(err.message);
-      setData((rows as T[]) ?? []);
-      setLoading(false);
-    })();
-    return () => { active = false; };
+    const refresh = async () => {
+      try {
+        let q = supabase.from(table as any).select("*");
+        if (orderBy) q = q.order(orderBy.column, { ascending: orderBy.ascending ?? true });
+        const { data: rows, error: err } = await q;
+        if (!active) return;
+        if (err) throw err;
+        setData((rows as T[]) ?? []);
+        setError(null);
+      } catch (err) {
+        if (active) setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void refresh();
+    const timer = refreshMs ? setInterval(() => {
+      if (document.visibilityState === "visible") void refresh();
+    }, refreshMs) : null;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      active = false;
+      if (timer) clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [table]);
+  }, [table, refreshMs]);
 
   return { data, loading, error };
 }
@@ -83,7 +100,7 @@ export const useSensorStations    = () => useTable<SensorStation>("sensor_statio
 export const useEvacuationCenters = () => useTable<EvacuationCenter>("evacuation_centers", { column: "name" });
 export const useAlerts            = () => useTable<Alert>("alerts", { column: "issued_at", ascending: false });
 export const useWeatherForecasts  = () => useTable<WeatherForecast>("weather_forecasts", { column: "forecast_for" });
-export const useFloodReadings     = () => useTable<FloodReading>("flood_readings", { column: "recorded_at", ascending: false });
+export const useFloodReadings     = () => useTable<FloodReading>("flood_readings", { column: "recorded_at", ascending: false }, 15000);
 
 
 /** OpenWeather 5-day / 3-hour forecast, shared with the Weather & Forecast screen.
