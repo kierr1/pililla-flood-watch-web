@@ -130,11 +130,12 @@ export default function Alerts() {
       <Panel label="CAMERA MONITORING" title="Live Camera View">
         {import.meta.env.VITE_CAMERA_STREAM_URL ? (
           <div className="mx-auto max-w-4xl overflow-hidden rounded border border-primary/20 bg-black">
-            <img
+            <iframe
               src={import.meta.env.VITE_CAMERA_STREAM_URL}
-              alt="Live Raspberry Pi camera feed"
-              className="aspect-video w-full object-contain"
-              loading="eager"
+              title="Live Raspberry Pi camera feed"
+              className="aspect-video w-full border-0"
+              allow="autoplay; fullscreen; picture-in-picture"
+              allowFullScreen
               referrerPolicy="no-referrer"
             />
           </div>
