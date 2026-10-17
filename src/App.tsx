@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AdminRoute } from "@/components/auth/RouteGuards";
 import MissionShell from "@/components/layout/MissionShell";
+import AlertScreenOverlay from "@/components/layout/AlertScreenOverlay";
 import Dashboard from "./pages/Dashboard";
 import GIS from "./pages/GIS";
 import Evacuation from "./pages/Evacuation";
@@ -28,6 +29,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <AlertScreenOverlay />
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route element={<MissionShell />}>
