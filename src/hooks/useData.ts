@@ -83,7 +83,7 @@ function useTable<T>(table: string, orderBy?: { column: string; ascending?: bool
           .subscribe()
       : null;
     const timer = refreshMs ? setInterval(() => {
-      if (document.visibilityState === "visible") void refresh();
+      if (table === "alerts" || document.visibilityState === "visible") void refresh();
     }, refreshMs) : null;
     const onVisible = () => {
       if (document.visibilityState === "visible") void refresh();
