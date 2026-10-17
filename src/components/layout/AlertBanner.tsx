@@ -20,6 +20,7 @@ export default function AlertBanner() {
   const { user, isAdmin } = useAuth();
   const { dismissedAlertIds, loading: dismissalsLoading, dismissAlert } = useAlertDismissals(user?.id ?? null);
   const [dismissedAdminAlertId, setDismissedAdminAlertId] = useState<string | null>(null);
+  const [dismissedGuestAlertId, setDismissedGuestAlertId] = useState<string | null>(null);
   const [deletedAlertIds, setDeletedAlertIds] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
@@ -35,7 +36,8 @@ export default function AlertBanner() {
   const visibleAlerts = alerts.filter(alert =>
     !deletedAlertIds.has(alert.id) &&
     !dismissedAlertIds.has(alert.id) &&
-    !(isAdmin && dismissedAdminAlertId === alert.id)
+    !(isAdmin && dismissedAdminAlertId === alert.id) &&
+    !(user === null && dismissedGuestAlertId === alert.id)
   );
   if (!visibleAlerts.length) return null;
 
@@ -73,6 +75,7 @@ export default function AlertBanner() {
           type="button"
           onClick={() => {
             if (isAdmin) setDismissedAdminAlertId(top.id);
+            else if (!user) setDismissedGuestAlertId(top.id);
             else void dismissAlert(top.id);
           }}
           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded text-muted-foreground transition hover:bg-foreground/10 hover:text-foreground"
