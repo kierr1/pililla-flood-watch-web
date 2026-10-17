@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell, BellRing, Loader2, Mail, MessageSquare, Trash2, Volume2, X } from "lucide-react";
+import { Bell, BellRing, Loader2, Trash2, X, VideoOff } from "lucide-react";
 import { Panel, PageHeader, RiskBadge } from "@/components/mission/Panel";
 import { EmptyState } from "@/components/mission/EmptyState";
 import { useAlerts, type Alert } from "@/hooks/useData";
@@ -66,7 +66,7 @@ export default function Alerts() {
       <PageHeader
         code="07"
         title="Alert System"
-        subtitle="Color-coded warnings, real-time banner alerts, and SMS/email/voice broadcast structure."
+        subtitle="Real-time community alerts and live camera monitoring."
       />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -84,7 +84,7 @@ export default function Alerts() {
         ))}
       </div>
 
-      <Panel label="LIVE FEED" title={`${visibleAlerts.length} Active Alert${visibleAlerts.length === 1 ? "" : "s"}`}>
+      <Panel label="ALERT FEED" title={`${visibleAlerts.length} Active Alert${visibleAlerts.length === 1 ? "" : "s"}`}>
         {loading || dismissalsLoading ? null : visibleAlerts.length === 0 ? (
           <EmptyState
             icon={<Bell className="h-5 w-5" />}
@@ -127,21 +127,27 @@ export default function Alerts() {
         )}
       </Panel>
 
-      <Panel label="BROADCAST CHANNELS" title="Multi-Channel Alert Dispatch (Ready)">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { icon: <MessageSquare className="h-5 w-5" />, name: "SMS Broadcast", note: "Configure with Twilio" },
-            { icon: <Mail className="h-5 w-5" />, name: "Email Cascade", note: "Configure SMTP" },
-            { icon: <Volume2 className="h-5 w-5" />, name: "Voice Sirens", note: "Field hardware" },
-            { icon: <Bell className="h-5 w-5" />, name: "Push Notifications", note: "Mobile app (planned)" },
-          ].map(c => (
-            <div key={c.name} className="p-4 rounded bg-surface-2/60 border border-primary/15 text-center">
-              <div className="mx-auto h-10 w-10 rounded grid place-items-center bg-primary/10 text-primary border border-primary/30 mb-2">{c.icon}</div>
-              <div className="font-semibold text-sm">{c.name}</div>
-              <div className="mono-label mt-1">{c.note}</div>
-            </div>
-          ))}
-        </div>
+      <Panel label="CAMERA MONITORING" title="Live Camera View">
+        {import.meta.env.VITE_CAMERA_STREAM_URL ? (
+          <div className="mx-auto max-w-4xl overflow-hidden rounded border border-primary/20 bg-black">
+            <img
+              src={import.meta.env.VITE_CAMERA_STREAM_URL}
+              alt="Live Raspberry Pi camera feed"
+              className="aspect-video w-full object-contain"
+              loading="eager"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+        ) : (
+          <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded border border-primary/20 bg-black/70 p-6 text-center">
+            <VideoOff className="h-9 w-9 text-muted-foreground" />
+            <p className="text-sm font-semibold text-foreground">Camera stream not configured</p>
+            <p className="max-w-lg text-xs text-muted-foreground">
+              Connect a live video stream from your Raspberry Pi to display it here.
+              Scheduled 30-minute image captures are separate and unchanged.
+            </p>
+          </div>
+        )}
       </Panel>
 
       <AlertDialog open={!!alertToManage} onOpenChange={open => !open && !saving && setAlertToManage(null)}>
