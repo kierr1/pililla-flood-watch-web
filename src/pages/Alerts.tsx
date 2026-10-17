@@ -28,8 +28,6 @@ export default function Alerts() {
   const visibleAlerts = alerts.filter(alert =>
     !deletedAlertIds.has(alert.id) && !dismissedAlertIds.has(alert.id)
   );
-  const critical = dismissalsLoading ? undefined : visibleAlerts.find(a => a.level === "critical");
-  const [showModal, setShowModal] = useState(true);
 
   async function manageAlert() {
     if (!alertToManage || saving) return;
@@ -145,27 +143,6 @@ export default function Alerts() {
           ))}
         </div>
       </Panel>
-
-      {showModal && critical && (
-        <div className="fixed inset-0 z-[60] grid place-items-center bg-background/80 backdrop-blur-md p-4 animate-fade-in">
-          <div className="glass-panel max-w-lg w-full border-risk-critical/60 animate-critical-pulse p-6">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <BellRing className="h-7 w-7 text-risk-critical animate-flicker" />
-                <div>
-                  <div className="mono-label text-risk-critical">PRIORITY ALPHA</div>
-                  <h3 className="display-font text-xl font-bold text-risk-critical text-glow-critical">{critical.title}</h3>
-                </div>
-              </div>
-              <button onClick={() => setShowModal(false)} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
-            </div>
-            {critical.message && <p className="text-sm mt-4">{critical.message}</p>}
-            <a href="/evacuation" className="mt-5 inline-block w-full text-center px-4 py-3 rounded bg-gradient-critical text-white font-bold shadow-glow-critical">
-              FIND SAFEST ROUTE NOW
-            </a>
-          </div>
-        </div>
-      )}
 
       <AlertDialog open={!!alertToManage} onOpenChange={open => !open && !saving && setAlertToManage(null)}>
         <AlertDialogContent>
