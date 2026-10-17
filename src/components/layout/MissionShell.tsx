@@ -8,7 +8,6 @@ import { useAuth } from "@/hooks/useAuth";
 import StatusBar from "./StatusBar";
 import { supabase } from "@/integrations/supabase/client";
 import AlertBanner from "./AlertBanner";
-import AlertScreenOverlay from "./AlertScreenOverlay";
 
 const NAV = [
   { to: "/", label: "Mission Dashboard", icon: Activity, code: "01" },
@@ -82,7 +81,6 @@ export default function MissionShell() {
     <div className="min-h-screen flex flex-col">
       <StatusBar onMenuToggle={() => setNavOpen(v => !v)} navOpen={navOpen} />
       <AlertBanner />
-      <AlertScreenOverlay />
 
       <div className="flex-1 flex w-full">
         {/* Sidebar */}
