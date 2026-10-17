@@ -6,6 +6,7 @@ import {
   useBarangays, useSensorStations, useEvacuationCenters, useAlerts, useFloodReadings,
 } from "@/hooks/useData";
 import { useOpenMeteo } from "@/hooks/useOpenMeteo";
+import { useLiveSensorReading } from "@/hooks/useLiveSensorReading";
 import { predictFlood, type FloodFeatures } from "@/lib/floodModel";
 import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -28,6 +29,7 @@ export default function Dashboard() {
   const { data: centers } = useEvacuationCenters();
   const { data: alerts } = useAlerts();
   const { data: readings } = useFloodReadings();
+  const { reading: liveReading, lastUpdated: liveUpdated, error: liveError } = useLiveSensorReading();
   const { averageRainfall: forecastRainfall, error: weatherRainError } = useOpenMeteo();
 
   const recent = readings.slice(0, 24);
@@ -115,10 +117,11 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Telemetry icon={<CloudRain className="h-4 w-4" />} label="RAINFALL (avg, forecast 1h)" value={forecastRainfall !== null ? forecastRainfall.toFixed(1) : "—"} unit="mm" />
-        <Telemetry icon={<Droplets className="h-4 w-4" />} label="WATER LEVEL" value={hasReadings ? features.water_level_m.toFixed(2) : "—"} unit="m" />
-        <Telemetry icon={<Wind className="h-4 w-4" />} label="WIND SPEED" value={hasReadings ? features.wind_speed.toFixed(2) : "—"} unit="m/s" />
+        <Telemetry icon={<Droplets className="h-4 w-4" />} label="WATER LEVEL · LIVE" value={liveReading?.water_level_m != null ? liveReading.water_level_m.toFixed(2) : "—"} unit="m" />
+        <Telemetry icon={<Wind className="h-4 w-4" />} label="WIND SPEED · LIVE" value={liveReading?.wind_speed != null ? liveReading.wind_speed.toFixed(2) : "—"} unit="m/s" />
       </div>
 
+      <p className="mono-font text-[11px] text-muted-foreground">Live sensor updates every 20 seconds from the Raspberry Pi. {liveReading ? `Last update: ${new Date(liveReading.updated_at).toLocaleTimeString("en-PH")}` : liveUpdated ? "Live telemetry is stale/offline" : "Awaiting live telemetry"}{liveError ? ` · ${liveError}` : ""}. Historical charts and Data Visualization use 30-minute saved readings.</p>
       {weatherRainError && <p className="text-xs text-muted-foreground">Open-Meteo rainfall forecast: {weatherRainError}</p>}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
