@@ -27,11 +27,13 @@ export default function AlertScreenOverlay() {
     const eligible = alerts.filter(a => !dismissedAlertIds.has(a.id));
     if (!initialized.current) {
       initialized.current = true;
-      // An alert that just went out should also show for newly opened tabs.
-      const cutoff = Date.now() - 2 * 60 * 1000;
-      const fresh = eligible.filter(a => new Date(a.issued_at).getTime() >= cutoff);
+      // Show the latest unacknowledged announcement immediately on initial page load,
+      // including alerts older than two minutes. New alerts still trigger independently.
       eligible.forEach(a => seen.current.add(a.id));
-      if (fresh.length) setActive(fresh.sort((a, b) => b.issued_at.localeCompare(a.issued_at))[0]);
+      if (eligible.length) {
+        const newest = [...eligible].sort((a, b) => b.issued_at.localeCompare(a.issued_at))[0];
+        setActive(newest);
+      }
       return;
     }
     const incoming = eligible.filter(a => !seen.current.has(a.id));
