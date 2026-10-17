@@ -77,6 +77,11 @@ function useTable<T>(table: string, orderBy?: { column: string; ascending?: bool
       }
     };
     void refresh();
+    const channel = table === "alerts"
+      ? supabase.channel("alerts-live-" + Math.random().toString(36).slice(2))
+          .on("postgres_changes", { event: "*", schema: "public", table: "alerts" }, () => void refresh())
+          .subscribe()
+      : null;
     const timer = refreshMs ? setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
     }, refreshMs) : null;
@@ -87,6 +92,7 @@ function useTable<T>(table: string, orderBy?: { column: string; ascending?: bool
     return () => {
       active = false;
       if (timer) clearInterval(timer);
+      if (channel) void supabase.removeChannel(channel);
       document.removeEventListener("visibilitychange", onVisible);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
