@@ -54,18 +54,18 @@ export default function AlertBanner() {
       )}
     >
       <div className={cn("absolute left-0 top-0 bottom-0 w-1", tone.bar, top.level === "critical" && "animate-flicker")} />
-      <div className="px-4 sm:px-6 py-2.5 flex items-center gap-3 flex-wrap">
+      <div className="px-3 sm:px-6 py-2.5 flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
         <span className={cn("mono-font font-bold text-[11px] px-2 py-0.5 rounded border", tone.text)}>
           {tone.label}
         </span>
         <AlertTriangle className={cn("h-4 w-4 shrink-0", tone.text)} />
-        <span className="text-sm font-medium truncate">{top.title}</span>
+        <span className="min-w-0 flex-1 basis-[9rem] text-sm font-medium break-words [overflow-wrap:anywhere]">{top.title}</span>
         {top.area && <span className="mono-label hidden sm:inline">· {top.area}</span>}
 
         <Link
           to="/evacuation"
           className={cn(
-            "ml-auto inline-flex items-center gap-2 px-3 py-1.5 rounded text-xs font-semibold transition-all",
+            "min-h-10 w-full sm:w-auto sm:ml-auto inline-flex justify-center items-center gap-2 px-3 py-2 rounded text-xs font-semibold transition-all",
             "border bg-primary/15 text-primary border-primary/50 hover:bg-primary/25 hover:shadow-glow"
           )}
         >
@@ -78,7 +78,7 @@ export default function AlertBanner() {
             else if (!user) setDismissedGuestAlertId(top.id);
             else void dismissAlert(top.id);
           }}
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded text-muted-foreground transition hover:bg-foreground/10 hover:text-foreground"
+          className="ml-auto sm:ml-0 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded text-muted-foreground transition hover:bg-foreground/10 hover:text-foreground"
           aria-label={`Dismiss ${top.title} notification`}
           title="Dismiss notification"
         >
