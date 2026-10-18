@@ -122,7 +122,17 @@ export default function Centers() {
         }
       />
 
-      {loading ? null : visibleCenters.length === 0 ? (
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" role="status" aria-label="Loading evacuation centers">
+          {Array.from({ length: 6 }, (_, i) => (
+            <div key={i} className="glass-panel p-5 space-y-4 animate-pulse motion-reduce:animate-none" aria-hidden="true">
+              <div className="flex gap-3"><div className="h-10 w-10 rounded bg-primary/10" /><div className="flex-1 space-y-2"><div className="h-4 rounded bg-primary/10 w-4/5" /><div className="h-3 rounded bg-primary/10 w-2/5" /></div></div>
+              <div className="h-2 rounded bg-primary/10" /><div className="h-3 rounded bg-primary/10 w-3/5" />
+            </div>
+          ))}
+          <span className="sr-only">Loading evacuation centers</span>
+        </div>
+      ) : visibleCenters.length === 0 ? (
         <Panel>
           <EmptyState
             icon={<Building2 className="h-5 w-5" />}
@@ -132,14 +142,14 @@ export default function Centers() {
         </Panel>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {visibleCenters.map(c => {
+          {visibleCenters.map((c, index) => {
             const cap = c.capacity ?? 0;
             const occu = c.occupancy ?? 0;
             const pct = cap > 0 ? (occu / cap) * 100 : 0;
             const status = pct >= 100 ? "FULL" : pct >= 80 ? "NEAR CAPACITY" : "AVAILABLE";
             const tone = pct >= 100 ? "critical" : pct >= 80 ? "moderate" : "low";
             return (
-              <div key={c.id} className="glass-panel glass-panel-hover hud-brackets p-5">
+              <div key={c.id} className="glass-panel glass-panel-hover hud-brackets p-5 shelter-card-enter transition-[transform,box-shadow,border-color] duration-200 motion-reduce:transition-none" style={{ animationDelay: `${Math.min(index, 10) * 45}ms` }}>
                 <div className="flex items-start gap-3">
                   <div className={cn("h-10 w-10 rounded grid place-items-center shrink-0",
                     tone === "low" && "bg-success/15 text-success border border-success/40",
