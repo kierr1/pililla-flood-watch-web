@@ -54,36 +54,34 @@ export default function AlertBanner() {
       )}
     >
       <div className={cn("absolute left-0 top-0 bottom-0 w-1", tone.bar, top.level === "critical" && "animate-flicker")} />
-      <div className="px-3 sm:px-6 py-2.5 flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
-        <span className={cn("mono-font font-bold text-[11px] px-2 py-0.5 rounded border", tone.text)}>
-          {tone.label}
-        </span>
-        <AlertTriangle className={cn("h-4 w-4 shrink-0", tone.text)} />
-        <span className="min-w-0 flex-1 basis-[9rem] text-sm font-medium break-words [overflow-wrap:anywhere]">{top.title}</span>
-        {top.area && <span className="mono-label hidden sm:inline">· {top.area}</span>}
-
+      <div className="px-3 sm:px-6 py-2.5 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 min-w-0">
+        <div className="flex w-full min-w-0 items-center gap-2 sm:flex-1">
+          <span className={cn("mono-font shrink-0 font-bold text-[11px] px-2 py-0.5 rounded border", tone.text)}>
+            {tone.label}
+          </span>
+          <AlertTriangle className={cn("h-4 w-4 shrink-0", tone.text)} />
+          <span className="min-w-0 flex-1 text-sm font-medium break-words [overflow-wrap:anywhere]">{top.title}</span>
+          {top.area && <span className="mono-label hidden lg:inline">· {top.area}</span>}
+          <button
+            type="button"
+            onClick={() => {
+              if (isAdmin) setDismissedAdminAlertId(top.id);
+              else if (!user) setDismissedGuestAlertId(top.id);
+              else void dismissAlert(top.id);
+            }}
+            className="ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label={`Dismiss ${top.title} notification`}
+            title="Dismiss notification"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
         <Link
           to="/evacuation"
-          className={cn(
-            "min-h-10 w-full sm:w-auto sm:ml-auto inline-flex justify-center items-center gap-2 px-3 py-2 rounded text-xs font-semibold transition-all",
-            "border bg-primary/15 text-primary border-primary/50 hover:bg-primary/25 hover:shadow-glow"
-          )}
+          className="min-h-10 w-full sm:w-auto sm:shrink-0 inline-flex justify-center items-center gap-2 rounded border border-primary/50 bg-primary/15 px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/25"
         >
-          Find Safest Route Now <ArrowRight className="h-3.5 w-3.5" />
+          Find Safest Route Now <ArrowRight className="h-3.5 w-3.5 shrink-0" />
         </Link>
-        <button
-          type="button"
-          onClick={() => {
-            if (isAdmin) setDismissedAdminAlertId(top.id);
-            else if (!user) setDismissedGuestAlertId(top.id);
-            else void dismissAlert(top.id);
-          }}
-          className="ml-auto sm:ml-0 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded text-muted-foreground transition hover:bg-foreground/10 hover:text-foreground"
-          aria-label={`Dismiss ${top.title} notification`}
-          title="Dismiss notification"
-        >
-          <X className="h-4 w-4" />
-        </button>
       </div>
     </div>
   );
