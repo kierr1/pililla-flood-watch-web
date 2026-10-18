@@ -103,6 +103,7 @@ export default function GISMap({
 
   const [baseMap, setBaseMap] = useState<"streets" | "satellite">("streets");
   const [mobileLayersOpen, setMobileLayersOpen] = useState(false);
+  const [mobileLegendOpen, setMobileLegendOpen] = useState(false);
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
     heatmap: true,
     barangays: true,
@@ -352,18 +353,36 @@ export default function GISMap({
         </div>
       </div>
 
-      <div className="absolute bottom-3 left-3 z-[500] glass-panel p-3">
-        <div className="mono-label mb-2">RISK SCALE</div>
-        <div className="flex items-center gap-3 text-[11px] mono-font">
-          {(["low", "moderate", "high", "critical"] as const).map((k) => (
-            <div key={k} className="flex items-center gap-1.5">
-              <span
-                className="h-2.5 w-2.5 rounded-sm"
-                style={{ background: RISK_COLOR[k], boxShadow: `0 0 6px ${RISK_COLOR[k]}` }}
-              />
-              <span className="capitalize text-foreground/80">{k}</span>
-            </div>
-          ))}
+      {/* Attribution remains visible at the bottom. Mobile legend sits above it. */}
+      <div className="absolute bottom-9 left-3 z-[500] md:bottom-9">
+        <button
+          type="button"
+          aria-label={mobileLegendOpen ? "Close risk scale" : "Show risk scale"}
+          aria-expanded={mobileLegendOpen}
+          aria-controls="mobile-risk-legend"
+          onClick={() => setMobileLegendOpen(v => !v)}
+          className="md:hidden glass-panel flex items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-semibold text-primary shadow-lg transition-colors duration-200 hover:bg-surface-2"
+        >
+          <span className="h-2.5 w-2.5 rounded-full bg-risk-moderate" />
+          RISK SCALE
+          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-200", mobileLegendOpen && "rotate-180")} />
+        </button>
+        <div
+          id="mobile-risk-legend"
+          className={cn(
+            "glass-panel p-3 mt-2 md:mt-0 shadow-lg origin-bottom-left transition-[opacity,transform,visibility] duration-200 motion-reduce:transition-none",
+            mobileLegendOpen ? "visible opacity-100 translate-y-0 scale-100" : "invisible absolute bottom-0 opacity-0 translate-y-2 scale-95 pointer-events-none md:static md:visible md:opacity-100 md:translate-y-0 md:scale-100 md:pointer-events-auto",
+          )}
+        >
+          <div className="mono-label mb-2">RISK SCALE</div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px] mono-font">
+            {(["low", "moderate", "high", "critical"] as const).map(k => (
+              <div key={k} className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-sm" style={{ background: RISK_COLOR[k], boxShadow: `0 0 6px ${RISK_COLOR[k]}` }} />
+                <span className="capitalize text-foreground/80">{k}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
