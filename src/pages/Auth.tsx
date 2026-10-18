@@ -13,6 +13,8 @@ export default function Auth() {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [emailNotConfirmed, setEmailNotConfirmed] = useState(false);
+  const [resending, setResending] = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,6 +28,7 @@ export default function Auth() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
+    setEmailNotConfirmed(false);
     try {
       if (mode === "signup") {
         const redirectUrl = `${window.location.origin}/`;
@@ -75,6 +78,7 @@ export default function Auth() {
         toast({ title: "Signed in" });
       }
     } catch (err: any) {
+      if (mode === "signin" && /email\s+not\s+confirmed/i.test(err.message ?? "")) setEmailNotConfirmed(true);
       toast({
         title: mode === "signup" ? "Sign-up failed" : "Sign-in failed",
         description: err.message ?? String(err),
@@ -83,6 +87,22 @@ export default function Auth() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function resendConfirmation() {
+    if (!email.trim()) return;
+    setResending(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: email.trim(),
+        options: { emailRedirectTo: `${window.location.origin}/auth` },
+      });
+      if (error) throw error;
+      toast({ title: "Confirmation requested", description: "Check inbox and spam. Email delivery depends on your Supabase email provider settings." });
+    } catch (err) {
+      toast({ title: "Unable to resend email", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+    } finally { setResending(false); }
   }
 
   return (
@@ -115,6 +135,11 @@ export default function Auth() {
             ))}
           </div>
 
+          {emailNotConfirmed && <div role="alert" className="mb-4 rounded border border-risk-high/40 bg-risk-high/10 p-3 text-sm space-y-2">
+            <p>Supabase requires email confirmation before login. Your admin approval alone cannot bypass this setting.</p>
+            <button type="button" onClick={() => void resendConfirmation()} disabled={resending || !email.trim()} className="min-h-10 rounded border border-primary/50 px-3 py-2 text-primary disabled:opacity-50">{resending ? "Sending…" : "Resend confirmation email"}</button>
+            <p className="text-xs text-muted-foreground">If no email arrives, an administrator must check Authentication → Email provider and SMTP delivery in Supabase.</p>
+          </div>}
           <form onSubmit={onSubmit} className="space-y-3">
             {mode === "signup" && (
               <Field
