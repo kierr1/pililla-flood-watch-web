@@ -1,7 +1,7 @@
 import { CloudRain, Wind, Droplets, Gauge, Cloud, CloudLightning, CloudDrizzle } from "lucide-react";
 import { Panel, PageHeader } from "@/components/mission/Panel";
 import { EmptyState } from "@/components/mission/EmptyState";
-import { useOpenMeteo } from "@/hooks/useOpenMeteo";
+import { useOpenMeteo, useRainModelComparison } from "@/hooks/useOpenMeteo";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from "recharts";
 
 const tt = {
@@ -11,8 +11,10 @@ const tt = {
 
 export default function Weather() {
   const { current, forecast: openWeatherForecast, loading: weatherLoading, error: weatherError } = useOpenMeteo();
+  const { models, loading: modelsLoading, error: modelsError } = useRainModelComparison();
   const apiUpcoming = openWeatherForecast.filter(f => new Date(f.forecast_for).getTime() >= Date.now());
   const chartForecasts = apiUpcoming.slice(0, 24);
+  const totals = [1, 3, 6, 12, 24].map(hours => ({ hours, value: apiUpcoming.slice(0, hours).length === hours ? apiUpcoming.slice(0, hours).reduce((sum, f) => sum + f.rain_mm, 0) : null }));
   const next24 = chartForecasts.map((f, i) => ({
     hour: i + 1,
     rain_mm: f.rain_mm ?? 0,
@@ -76,6 +78,36 @@ export default function Weather() {
         ) : null}
       </Panel>
 
+      <Panel label="RAINFALL ACCUMULATION" title="Predicted Rainfall Totals">
+        <p className="mb-4 text-xs text-muted-foreground">Accumulated precipitation starting from the next forecast hour. These are model estimates, not measured rainfall or verified flood thresholds.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          {totals.map(item => <div key={item.hours} className="rounded-lg border border-primary/15 bg-surface-2/60 p-3 transition-colors duration-200 hover:border-primary/40">
+            <div className="mono-label">{item.hours}H TOTAL</div>
+            <div className="mono-font text-xl font-bold text-primary mt-2">{item.value == null ? "—" : item.value.toFixed(1)} <span className="text-xs">mm</span></div>
+          </div>)}
+        </div>
+      </Panel>
+
+      <Panel label="MULTI-MODEL COMPARISON" title="Rainfall Forecast Agreement">
+        <p className="mb-4 text-xs text-muted-foreground">Open-Meteo Best Match, ECMWF, and NOAA GFS. These are independent forecast configurations, not independent observations. Disagreement signals model spread, not a calibrated confidence percentage.</p>
+        {modelsLoading && !models.length ? <div className="mono-font text-sm text-muted-foreground animate-pulse">Loading forecast models…</div> : (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {models.map(m => <div key={m.model} className="rounded-lg bg-surface-2/60 border border-primary/15 p-4">
+              <div className="font-semibold text-sm">{m.model}</div>
+              <div className="mt-3 text-sm mono-font text-primary">24h: {m.rainfall24h == null ? "Unavailable" : m.rainfall24h.toFixed(1) + " mm"}</div>
+              <div className="mt-1 text-xs text-muted-foreground mono-font">72h: {m.rainfall72h == null ? "Unavailable" : m.rainfall72h.toFixed(1) + " mm"}</div>
+            </div>)}
+          </div>
+        )}
+        {modelsError && <p className="mt-3 text-xs text-risk-moderate">{modelsError}</p>}
+        {(() => {
+          const valid = models.map(m => m.rainfall24h).filter((v): v is number => v != null);
+          if (valid.length < 2) return <p className="mt-3 text-xs text-muted-foreground">At least two models are needed to compare estimates.</p>;
+          const min = Math.min(...valid), max = Math.max(...valid);
+          return <p className="mt-3 text-sm text-muted-foreground">24-hour model range: <strong className="text-foreground">{min.toFixed(1)}–{max.toFixed(1)} mm</strong>. This range is not an official uncertainty interval.</p>;
+        })()}
+      </Panel>
+
       <Panel label="NEXT 24 HOURS · HOURLY FORECAST" title="Rainfall Outlook">
         {weatherLoading ? null : next24.length === 0 ? (
           <EmptyState
@@ -112,14 +144,15 @@ export default function Weather() {
               const low = d.temps.length ? Math.round(Math.min(...d.temps)) : null;
               const Icon = d.rain_mm > 40 ? CloudLightning : d.rain_mm > 20 ? CloudRain : d.rain_mm > 10 ? CloudDrizzle : Cloud;
               return (
-                <div key={i} className="p-4 rounded bg-surface-2/60 border border-primary/15 text-center">
+                <div key={i} className="p-4 rounded bg-surface-2/60 border border-primary/15 text-center transition-[border-color,transform] duration-200 hover:border-primary/40 hover:-translate-y-0.5 motion-reduce:transition-none">
                   <div className="mono-label mb-2">{d.day.toUpperCase()}</div>
                   <Icon className="h-8 w-8 mx-auto text-primary" />
                   <div className="mt-2">
                     <span className="font-bold">{high ?? "—"}°</span><span className="text-muted-foreground text-xs"> / {low ?? "—"}°</span>
                   </div>
                   <div className="mono-font text-xs text-primary mt-1">{d.rain_mm.toFixed(0)} mm</div>
-                  <div className="mono-label">{d.rain_chance}% rain</div>
+                  <div className="mono-label">{d.rain_chance}% peak hourly chance</div>
+                  <div className="mt-2 text-[10px] text-muted-foreground">{i <= 2 ? "Near-term outlook" : i <= 4 ? "Increasing uncertainty" : "Long-range outlook"}</div>
                 </div>
               );
             })}
