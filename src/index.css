@@ -316,3 +316,8 @@
   .mission-page-enter .glass-panel-hover,
   .mission-page-enter .leaflet-control-zoom a { transition: none !important; }
 }
+
+/* Shelter cards enter gently after async data loads. */
+@keyframes shelter-card-reveal { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.shelter-card-enter { animation: shelter-card-reveal 320ms cubic-bezier(.2,.8,.2,1) both; }
+@media (prefers-reduced-motion: reduce) { .shelter-card-enter { animation: none !important; } }
