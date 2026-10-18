@@ -120,8 +120,9 @@ export default function AdminUsers() {
     }
     setPendingId(target.id);
     try {
-      const { error } = await supabase.from("profiles").update({ approval_status: next }).eq("id", target.id);
+      const { data: updated, error } = await supabase.from("profiles").update({ approval_status: next }).eq("id", target.id).select("id,approval_status").maybeSingle();
       if (error) throw error;
+      if (!updated || updated.approval_status !== next) throw new Error("Approval was not saved. Check profiles update permissions and database policies.");
       await supabase.from("audit_logs").insert({
         action: next === "approved" ? "approve_user" : "reject_user",
         actor_id: me?.id ?? null,
