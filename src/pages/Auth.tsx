@@ -7,6 +7,14 @@ import { toast } from "@/hooks/use-toast";
 
 type Mode = "signin" | "signup";
 
+const passwordRules = [
+  { label: "At least 8 characters", check: (value: string) => value.length >= 8 },
+  { label: "One uppercase letter (A–Z)", check: (value: string) => /[A-Z]/.test(value) },
+  { label: "One lowercase letter (a–z)", check: (value: string) => /[a-z]/.test(value) },
+  { label: "One number (0–9)", check: (value: string) => /[0-9]/.test(value) },
+  { label: "One symbol (such as ! @ # $ %)", check: (value: string) => /[^A-Za-z0-9\s]/.test(value) },
+];
+
 export default function Auth() {
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
@@ -31,6 +39,8 @@ export default function Auth() {
     setEmailNotConfirmed(false);
     try {
       if (mode === "signup") {
+        const missing = passwordRules.filter(rule => !rule.check(password));
+        if (missing.length) throw new Error("Password must include: " + missing.map(rule => rule.label).join(", "));
         const redirectUrl = `${window.location.origin}/`;
         const { error } = await supabase.auth.signUp({
           email,
@@ -151,11 +161,24 @@ export default function Auth() {
               />
             )}
             <Field label="Email" type="email" value={email} onChange={setEmail} required placeholder="operator@agency.gov" />
-            <Field label="Password" type="password" value={password} onChange={setPassword} required minLength={6} placeholder="•••••••" />
+            <Field label="Password" type="password" value={password} onChange={setPassword} required minLength={mode === "signup" ? 8 : undefined} placeholder="••••••••" />
+            {mode === "signup" && (
+              <div className="rounded border border-primary/20 bg-surface-2/40 p-3" aria-label="Password requirements">
+                <p className="mb-2 text-xs font-semibold text-foreground">Password requirements</p>
+                <ul className="space-y-1">
+                  {passwordRules.map(rule => {
+                    const valid = rule.check(password);
+                    return <li key={rule.label} className={`text-xs ${valid ? "text-risk-low" : "text-muted-foreground"}`}>
+                      <span aria-hidden="true">{valid ? "✓" : "○"}</span> {rule.label}
+                    </li>;
+                  })}
+                </ul>
+              </div>
+            )}
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || (mode === "signup" && passwordRules.some(rule => !rule.check(password)))}
               className="w-full mt-2 px-4 py-2.5 rounded bg-gradient-primary text-primary-foreground font-bold text-sm shadow-glow hover:scale-[1.01] transition disabled:opacity-60 inline-flex items-center justify-center gap-2"
             >
               {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
