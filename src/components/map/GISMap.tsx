@@ -117,9 +117,11 @@ export default function GISMap({
     const map = L.map(containerRef.current, {
       center: [PILILLA_CENTER[1], PILILLA_CENTER[0]],
       zoom: 10,
-      zoomControl: true,
+      zoomControl: false,
       attributionControl: true,
     });
+    // Keep Leaflet zoom buttons away from the mobile layers menu.
+    L.control.zoom({ position: "topright" }).addTo(map);
     mapRef.current = map;
     const observer = new ResizeObserver(() => map.invalidateSize({ pan: false, debounceMoveend: true }));
     observer.observe(containerRef.current);
@@ -318,7 +320,7 @@ export default function GISMap({
         aria-controls="mobile-map-layers"
         aria-expanded={mobileLayersOpen}
         onClick={() => setMobileLayersOpen(open => !open)}
-        className="absolute top-3 left-3 z-[510] md:hidden inline-flex min-h-11 items-center gap-2 rounded border border-primary/50 bg-background/95 px-3 py-2 text-xs font-semibold text-primary shadow-lg backdrop-blur"
+        className="absolute top-3 left-3 z-[510] md:hidden inline-flex min-h-11 items-center gap-2 rounded-lg border border-primary/50 bg-background/95 px-3 py-2 text-xs font-semibold text-primary shadow-lg backdrop-blur-md transition-[transform,background-color,border-color,box-shadow] duration-200 ease-out active:scale-[0.97] hover:border-primary hover:bg-surface-2 motion-reduce:transition-none"
       >
         {mobileLayersOpen ? <X className="h-4 w-4" /> : <Layers className="h-4 w-4" />}
         <span>{mobileLayersOpen ? "CLOSE LAYERS" : "MAP LAYERS"}</span>
@@ -327,8 +329,8 @@ export default function GISMap({
       <div
         id="mobile-map-layers"
         className={cn(
-          "absolute left-3 top-16 z-[500] glass-panel w-60 max-w-[calc(100%-1.5rem)] max-h-[calc(100%-5rem)] overflow-y-auto p-3 shadow-xl md:top-3 md:block md:w-56",
-          mobileLayersOpen ? "block" : "hidden",
+          "absolute left-3 top-16 z-[500] glass-panel w-60 max-w-[calc(100%-1.5rem)] max-h-[calc(100%-5rem)] overflow-y-auto p-3 shadow-xl origin-top-left transition-[opacity,transform,visibility] duration-200 ease-out md:top-3 md:block md:w-56 md:opacity-100 md:visible md:translate-y-0 md:scale-100 motion-reduce:transition-none",
+          mobileLayersOpen ? "visible opacity-100 translate-y-0 scale-100 pointer-events-auto" : "invisible opacity-0 -translate-y-2 scale-95 pointer-events-none md:pointer-events-auto",
         )}
       >
         <div className="flex items-center gap-2 mb-2">
@@ -388,7 +390,7 @@ function LayerToggle({
     <button
       onClick={() => setLayers({ ...layers, [k]: !on })}
       className={cn(
-        "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition border",
+        "w-full min-h-10 flex items-center gap-2 px-2 py-2 rounded text-xs transition-[background-color,border-color,color,transform] duration-200 ease-out active:scale-[0.98] border motion-reduce:transition-none",
         on
           ? "bg-primary/15 text-primary border-primary/40"
           : "text-muted-foreground border-transparent hover:bg-primary/5",
