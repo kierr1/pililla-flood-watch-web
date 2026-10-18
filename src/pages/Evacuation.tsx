@@ -5,6 +5,7 @@ import { Panel, PageHeader } from "@/components/mission/Panel";
 import { EmptyState } from "@/components/mission/EmptyState";
 import GISMap from "@/components/map/GISMap";
 import { distanceKm } from "@/data/pililla";
+import { kShortestRoadRoutes } from "@/lib/kShortestRoutes";
 import { useEvacuationCenters, useBarangays, useSensorStations } from "@/hooks/useData";
 import { cn } from "@/lib/utils";
 
@@ -66,46 +67,51 @@ export default function Evacuation() {
     if (!user || targetLng == null || targetLat == null) return;
     const controller = new AbortController();
     setRoutingStatus("Calculating route on mapped roads...");
-    const url = `https://router.project-osrm.org/route/v1/driving/${user[0]},${user[1]};${targetLng},${targetLat}?overview=full&geometries=geojson&alternatives=true&steps=false`;
-    fetch(url, { signal: controller.signal })
-      .then(async response => {
-        if (!response.ok) throw new Error("Road routing service is unavailable.");
-        return response.json();
-      })
-      .then(data => {
+    async function calculate() {
+      try {
+        // K-shortest loopless paths over real mapped OSM road edges.
+        let usable: { coords: LngLat[]; distance: number; duration: number }[];
+        let algorithm = "K-shortest (Yen)";
+        try {
+          usable = await kShortestRoadRoutes(user!, [targetLng!, targetLat!], controller.signal, 3);
+        } catch (graphError) {
+          if (controller.signal.aborted) return;
+          // OSRM provides genuine drivable road geometries when Overpass is unavailable.
+          algorithm = "OSRM fallback";
+          const url = `https://router.project-osrm.org/route/v1/driving/${user![0]},${user![1]};${targetLng},${targetLat}?overview=full&geometries=geojson&alternatives=true&steps=false`;
+          const response = await fetch(url, { signal: controller.signal });
+          if (!response.ok) throw graphError;
+          const data = await response.json();
+          if (data.code !== "Ok" || !Array.isArray(data.routes) || !data.routes.length) throw graphError;
+          const snaps: number[] = (data.waypoints ?? []).map((p: {distance?: number}) => p.distance ?? Infinity);
+          if (snaps.length !== 2 || snaps.some(d => !Number.isFinite(d) || d > 150))
+            throw Error("GPS or shelter is over 150 meters from a mapped road.");
+          usable = data.routes.slice(0, 3).map((route: {geometry?: {coordinates?: unknown}; distance: number; duration: number}) => {
+            const coords = route.geometry?.coordinates;
+            if (!Array.isArray(coords)) return null;
+            const points: LngLat[] = coords.filter((p: unknown): p is LngLat =>
+              Array.isArray(p) && p.length >= 2 && Number.isFinite(p[0]) && Number.isFinite(p[1])
+              && Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90
+            );
+            if (points.length < 2 || points.slice(1).some((p, i) => distanceKm(points[i], p) > 1)) return null;
+            if (!Number.isFinite(route.distance) || !Number.isFinite(route.duration)) return null;
+            return { coords: points, distance: route.distance, duration: route.duration };
+          }).filter((route: unknown): route is { coords: LngLat[]; distance: number; duration: number } => route !== null);
+        }
         if (controller.signal.aborted) return;
-        if (data.code !== "Ok" || !Array.isArray(data.routes) || !data.routes.length) {
-          throw new Error("No drivable road route found.");
-        }
-        const waypointDistances: number[] = (data.waypoints ?? []).map((p: {distance?: number}) => p.distance ?? Infinity);
-        if (waypointDistances.length !== 2 || waypointDistances.some(d => !Number.isFinite(d) || d > 150)) {
-          throw new Error("Origin or shelter is over 150 meters from a mapped road. Verify GPS and shelter coordinates.");
-        }
-        const usable = data.routes.slice(0, 2).map((route: {geometry?: {coordinates?: unknown}; distance: number; duration: number}, index: number) => {
-          const coords = route.geometry?.coordinates;
-          if (!Array.isArray(coords)) return null;
-          const points: LngLat[] = coords.filter((p: unknown): p is LngLat =>
-            Array.isArray(p) && p.length >= 2 && Number.isFinite(p[0]) && Number.isFinite(p[1])
-            && Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90
-          );
-          if (points.length < 2) return null;
-          // A disconnected route should never be shown as a plausible evacuation path.
-          const gap = points.slice(1).some((point, i) => distanceKm(points[i], point) > 1);
-          if (gap) return null;
-          return { coords: points, color: index === 0 ? "#00ffd4" : "#ffcc33", dashed: index > 0,
-            distance: route.distance, duration: route.duration };
-        }).filter((route: unknown): route is {coords: LngLat[]; color: string; dashed: boolean; distance: number; duration: number} => route !== null);
-        if (!usable.length) throw new Error("No reliable road geometry returned.");
-        setRoadRoutes(usable.map(({ coords, color, dashed }) => ({ coords, color, dashed })));
+        if (!usable.length) throw Error("No connected road route found.");
+        const colors = ["#00ffd4", "#ffcc33", "#ff8a3d"];
+        setRoadRoutes(usable.map((r, i) => ({ coords: r.coords, color: colors[i], dashed: i > 0 })));
         setRoadStats({ distance: usable[0].distance / 1000, duration: usable[0].duration / 60 });
-        setRoutingStatus(`${usable.length} mapped driving route(s) found. Road and flood safety have not been verified.`);
-      })
-      .catch(err => {
+        setRoutingStatus(`${algorithm}: ${usable.length} mapped route(s). K-shortest estimates use a fixed 25 km/h, not traffic. Roads, closures and flood safety are NOT verified.`);
+      } catch (err) {
         if (controller.signal.aborted) return;
         setRoadRoutes([]);
         setRoadStats(null);
         setRoutingStatus(err instanceof Error ? err.message : "Road routing failed.");
-      });
+      }
+    }
+    void calculate();
     return () => controller.abort();
   }, [user, targetLng, targetLat]);
 
@@ -124,7 +130,7 @@ export default function Evacuation() {
       <PageHeader
         code="03"
         title="Evacuation Road Routing"
-        subtitle="Find nearby evacuation centers and request real driving routes. Check flood conditions before travel."
+        subtitle="Find up to three mapped driving routes with K-shortest-path search. Routes are not flood-safety verified."
         action={
           <button
             onClick={locate}
@@ -233,12 +239,12 @@ function RouteBriefing({ target, routesCount, roadStats }: { target: { coords: L
         <div className="flex items-center gap-2 text-xs">
           <span className="h-1.5 w-6 rounded" style={{ background: "#00ffd4", boxShadow: "0 0 8px #00ffd4" }} />
           <span className="font-semibold">PRIMARY</span>
-          <span className="mono-label ml-auto">ROAD ROUTE</span>
+          <span className="mono-label ml-auto">SHORTEST MAPPED</span>
         </div>
         {routesCount > 1 && <div className="flex items-center gap-2 text-xs">
           <span className="h-1.5 w-6 rounded border-dashed border-2" style={{ borderColor: "#ffcc33" }} />
           <span className="font-semibold">ALTERNATIVE</span>
-          <span className="mono-label ml-auto">IF AVAILABLE</span>
+          <span className="mono-label ml-auto">IF AVAILABLE · UNVERIFIED</span>
         </div>}
       </div>
 
