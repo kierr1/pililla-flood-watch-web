@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet.heat";
@@ -80,7 +80,7 @@ const TILE_LAYERS = {
   },
 } as const;
 
-export default function GISMap({
+function GISMap({
   defaultLayers,
   userLocation,
   routes,
@@ -124,7 +124,11 @@ export default function GISMap({
     // Keep Leaflet zoom buttons away from the mobile layers menu.
     L.control.zoom({ position: "topright" }).addTo(map);
     mapRef.current = map;
-    const observer = new ResizeObserver(() => map.invalidateSize({ pan: false, debounceMoveend: true }));
+    let resizeFrame = 0;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => map.invalidateSize({ pan: false, debounceMoveend: true }));
+    });
     observer.observe(containerRef.current);
     const frame = requestAnimationFrame(() => map.invalidateSize({ pan: false }));
 
@@ -137,6 +141,7 @@ export default function GISMap({
 
     return () => {
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(resizeFrame);
       observer.disconnect();
       map.remove();
       mapRef.current = null;
@@ -163,7 +168,7 @@ export default function GISMap({
     tileRef.current = L.tileLayer(cfg.url, {
       attribution: cfg.attribution,
       maxZoom: cfg.maxZoom,
-      keepBuffer: 4,
+      keepBuffer: 2,
       updateWhenIdle: true,
       crossOrigin: true,
     }).addTo(map);
@@ -288,7 +293,8 @@ export default function GISMap({
       iconAnchor: [9, 9],
     });
     userMarkerRef.current = L.marker([lat, lng], { icon }).addTo(map);
-    map.flyTo([lat, lng], 14, { duration: 0.8 });
+    // Avoid expensive map animations while mobile tiles and overlays load.
+    map.setView([lat, lng], 14, { animate: false });
   }, [userLocation]);
 
   // Routes
@@ -390,6 +396,8 @@ export default function GISMap({
     </div>
   );
 }
+
+export default memo(GISMap);
 
 function LayerToggle({
   icon,
