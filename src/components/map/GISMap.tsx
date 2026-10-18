@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet.heat";
-import { Layers, MapPin, Droplets, Building2, Radio } from "lucide-react";
+import { Layers, MapPin, Droplets, Building2, Radio, ChevronDown, X } from "lucide-react";
 import { PILILLA_CENTER } from "@/data/pililla";
 import { cn } from "@/lib/utils";
 
@@ -102,6 +102,7 @@ export default function GISMap({
   const userMarkerRef = useRef<L.Marker | null>(null);
 
   const [baseMap, setBaseMap] = useState<"streets" | "satellite">("streets");
+  const [mobileLayersOpen, setMobileLayersOpen] = useState(false);
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
     heatmap: true,
     barangays: true,
@@ -310,7 +311,26 @@ export default function GISMap({
     <div className={cn("relative glass-panel hud-brackets overflow-hidden", className || "h-[600px]")}>
       <div ref={containerRef} className="absolute inset-0 z-0 leaflet-mission" />
 
-      <div className="absolute top-3 left-3 z-[500] glass-panel p-3 w-56 max-w-[calc(100%-1.5rem)]">
+      {/* On phones keep the map unobstructed until the user opens the layer menu. */}
+      <button
+        type="button"
+        aria-label={mobileLayersOpen ? "Close map layers" : "Open map layers"}
+        aria-controls="mobile-map-layers"
+        aria-expanded={mobileLayersOpen}
+        onClick={() => setMobileLayersOpen(open => !open)}
+        className="absolute top-3 left-3 z-[510] md:hidden inline-flex min-h-11 items-center gap-2 rounded border border-primary/50 bg-background/95 px-3 py-2 text-xs font-semibold text-primary shadow-lg backdrop-blur"
+      >
+        {mobileLayersOpen ? <X className="h-4 w-4" /> : <Layers className="h-4 w-4" />}
+        <span>{mobileLayersOpen ? "CLOSE LAYERS" : "MAP LAYERS"}</span>
+        {!mobileLayersOpen && <ChevronDown className="h-4 w-4" />}
+      </button>
+      <div
+        id="mobile-map-layers"
+        className={cn(
+          "absolute left-3 top-16 z-[500] glass-panel w-60 max-w-[calc(100%-1.5rem)] max-h-[calc(100%-5rem)] overflow-y-auto p-3 shadow-xl md:top-3 md:block md:w-56",
+          mobileLayersOpen ? "block" : "hidden",
+        )}
+      >
         <div className="flex items-center gap-2 mb-2">
           <Layers className="h-3.5 w-3.5 text-primary" />
           <span className="mono-label">MAP LAYERS</span>
