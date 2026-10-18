@@ -297,3 +297,22 @@
   padding: 0;
 }
 .leaflet-tooltip.gis-label::before { display: none; }
+
+/* Motion polish: lightweight transforms, no layout shifts or moving map tiles. */
+@keyframes mission-page-arrive {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.mission-page-enter { animation: mission-page-arrive 260ms cubic-bezier(.2,.8,.2,1) both; }
+.mission-page-enter .glass-panel-hover,
+.mission-page-enter .leaflet-control-zoom a {
+  transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+}
+.mission-page-enter nav a, .mission-page-enter button {
+  -webkit-tap-highlight-color: transparent;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mission-page-enter { animation: none !important; }
+  .mission-page-enter .glass-panel-hover,
+  .mission-page-enter .leaflet-control-zoom a { transition: none !important; }
+}
