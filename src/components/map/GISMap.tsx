@@ -370,8 +370,8 @@ export default function GISMap({
         <div
           id="mobile-risk-legend"
           className={cn(
-            "glass-panel p-3 mt-2 md:mt-0 shadow-lg origin-bottom-left transition-[opacity,transform,visibility] duration-200 motion-reduce:transition-none",
-            mobileLegendOpen ? "visible opacity-100 translate-y-0 scale-100" : "invisible absolute bottom-0 opacity-0 translate-y-2 scale-95 pointer-events-none md:static md:visible md:opacity-100 md:translate-y-0 md:scale-100 md:pointer-events-auto",
+            "glass-panel p-3 absolute bottom-full left-0 mb-2 w-[min(290px,calc(100vw-3.5rem))] md:static md:mb-0 md:w-auto shadow-lg origin-bottom-left transition-[opacity,transform,visibility] duration-200 motion-reduce:transition-none",
+            mobileLegendOpen ? "visible opacity-100 translate-y-0 scale-100" : "invisible opacity-0 translate-y-2 scale-95 pointer-events-none md:visible md:opacity-100 md:translate-y-0 md:scale-100 md:pointer-events-auto",
           )}
         >
           <div className="mono-label mb-2">RISK SCALE</div>
