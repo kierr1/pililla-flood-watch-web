@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { predictFlood } from "@/lib/floodModel";
 import { distanceKm, type RiskLevel } from "@/data/pililla";
@@ -108,7 +108,7 @@ export function useFloodRisk(): State {
   }, [refetchReadings, refetchForecasts, refetchBarangays]);
 
   // Compute risk per barangay
-  const enriched: BarangayRisk[] = barangays.map((b) => {
+  const enriched: BarangayRisk[] = useMemo(() => barangays.map((b) => {
     // Find nearest sensor to barangay (by lat/lng); fall back to any sensor with a recent reading
     let nearestSensorId: string | null = null;
     if (b.lat != null && b.lng != null) {
@@ -155,7 +155,7 @@ export function useFloodRisk(): State {
       nearest_sensor_id: nearestSensorId,
       updated_at: latest?.recorded_at ?? new Date().toISOString(),
     };
-  });
+  }), [barangays, sensors, readings, forecasts]);
 
   return { barangays: enriched, loading, lastEventAt };
 }
