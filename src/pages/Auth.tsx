@@ -16,7 +16,7 @@ export default function Auth() {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, loading } = useAuth();
+  const { user, loading, approvalError, approvalStatus, refreshAccess } = useAuth();
   const from = (location.state as any)?.from?.pathname || "/";
 
   useEffect(() => {
@@ -46,31 +46,32 @@ export default function Auth() {
           description: "Your account is pending admin approval. You will be notified once granted access.",
         });
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
         if (error) throw error;
 
-        // Verify approval status before allowing access.
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (authUser) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("approval_status")
-            .eq("id", authUser.id)
-            .maybeSingle();
-          if (profile?.approval_status !== "approved") {
-            await supabase.auth.signOut();
-            const status = profile?.approval_status ?? "pending";
-            toast({
-              title: status === "rejected" ? "Access denied" : "Awaiting approval",
-              description:
-                status === "rejected"
-                  ? "Your access request was rejected. Contact an administrator."
-                  : "Your account is still pending admin approval.",
-              variant: "destructive",
-            });
-            return;
-          }
+        // AuthProvider exposes a user only after the approved profile is verified.
+        const { data: { user: authUser }, error: userError } = await supabase.auth.getUser();
+        if (userError) throw userError;
+        if (!authUser) throw new Error("Sign-in succeeded but no user session was returned.");
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("approval_status")
+          .eq("id", authUser.id)
+          .maybeSingle();
+        if (profileError) throw new Error("Could not read approval status: " + profileError.message);
+        if (!profile) throw new Error("Your user profile was not found. Contact the administrator to repair the account.");
+        if (profile.approval_status !== "approved") {
+          await supabase.auth.signOut();
+          toast({
+            title: profile.approval_status === "rejected" ? "Access denied" : "Awaiting approval",
+            description: profile.approval_status === "rejected"
+              ? "Your request was rejected. Contact an administrator."
+              : "Your account has not yet been approved. Try signing in again after approval.",
+            variant: "destructive",
+          });
+          return;
         }
+        await refreshAccess();
         toast({ title: "Signed in" });
       }
     } catch (err: any) {
@@ -98,6 +99,8 @@ export default function Auth() {
         </Link>
 
         <div className="glass-panel hud-brackets p-6">
+          {approvalError && <p role="alert" className="mb-4 text-sm text-risk-high break-words">Approval check failed: {approvalError}</p>}
+          {approvalStatus === "pending" && <p role="status" className="mb-4 text-sm text-risk-moderate">Your account is awaiting administrator approval.</p>}
           <div className="flex gap-1 mb-5 p-1 rounded bg-surface-2 border border-primary/15">
             {(["signin", "signup"] as Mode[]).map(m => (
               <button
@@ -138,7 +141,7 @@ export default function Auth() {
           <p className="mono-label text-center mt-5">
             New accounts require <span className="text-primary">admin approval</span> before access is granted.
             <br />
-            No email confirmation needed — you will be notified once approved.
+            Email confirmation may also be required if enabled in Supabase.
           </p>
         </div>
 
