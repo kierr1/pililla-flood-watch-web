@@ -82,52 +82,6 @@ async function requestForecast(): Promise<{ current: WeatherNow; points: Forecas
   try { return await pending; } finally { pending = null; }
 }
 
-export interface RainModelComparison {
-  model: string;
-  rainfall24h: number | null;
-  rainfall72h: number | null;
-}
-let comparisonCache: { at: number; values: RainModelComparison[] } | null = null;
-export function useRainModelComparison() {
-  const [models, setModels] = useState<RainModelComparison[]>(comparisonCache?.values ?? []);
-  const [loading, setLoading] = useState(!comparisonCache);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (comparisonCache && Date.now() - comparisonCache.at < 30 * 60 * 1000) {
-      setModels(comparisonCache.values); setLoading(false); return;
-    }
-    const controller = new AbortController();
-    const [longitude, latitude] = PILILLA_CENTER;
-    const names = [{ id: "best_match", name: "Best Match" }, { id: "ecmwf_ifs025", name: "ECMWF IFS 0.25°" }, { id: "gfs_seamless", name: "NOAA GFS" }];
-    Promise.all(names.map(async m => {
-      const q = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), hourly: "precipitation", models: m.id, forecast_days: "4", timezone: "UTC" });
-      try {
-        const response = await fetch(`https://api.open-meteo.com/v1/forecast?${q}`, { signal: controller.signal });
-        if (!response.ok) throw Error(`HTTP ${response.status}`);
-        const result = await response.json() as { hourly?: { time?: string[]; precipitation?: (number | null)[] } };
-        const rows = (result.hourly?.time ?? []).map((t, i) => ({ t: Date.parse(t + "Z"), v: result.hourly?.precipitation?.[i] }));
-        const now = Date.now();
-        const total = (hours: number) => {
-          const matching = rows.filter(p => p.t >= now && p.t < now + hours * 3600000 && typeof p.v === "number" && Number.isFinite(p.v));
-          return matching.length >= hours - 1 ? matching.reduce((sum, p) => sum + (p.v as number), 0) : null;
-        };
-        return { model: m.name, rainfall24h: total(24), rainfall72h: total(72) };
-      } catch (e) {
-        if (controller.signal.aborted) throw e;
-        return { model: m.name, rainfall24h: null, rainfall72h: null };
-      }
-    })).then(values => {
-      if (controller.signal.aborted) return;
-      setModels(values); comparisonCache = { at: Date.now(), values };
-      if (values.every(v => v.rainfall24h == null)) setError("Model comparison unavailable.");
-      else setError(null);
-    }).catch(e => { if (!controller.signal.aborted) setError(String(e)); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, []);
-  return { models, loading, error };
-}
-
 export function useOpenMeteo() {
   const [current, setCurrent] = useState<WeatherNow | null>(cached?.current ?? null);
   const [forecast, setForecast] = useState<ForecastPoint[]>(cached?.points ?? []);
