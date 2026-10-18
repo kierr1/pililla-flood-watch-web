@@ -4,7 +4,7 @@ import GISMap from "@/components/map/GISMap";
 import { useSensorStations, useEvacuationCenters } from "@/hooks/useData";
 import { useFloodRisk } from "@/hooks/useFloodRisk";
 import { Map as MapIcon, Radio, Building2, Activity, Navigation, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export default function GIS() {
   const { barangays, loading: bLoading, lastEventAt } = useFloodRisk();
@@ -14,7 +14,7 @@ export default function GIS() {
   // "Updated Xs ago" ticker
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    const id = setInterval(() => setNow(Date.now()), 10000);
     return () => clearInterval(id);
   }, []);
   const sinceLabel = (() => {
@@ -130,22 +130,24 @@ export default function GIS() {
   };
   // ---------------------------------
 
-  const mapBarangays = barangays
+  const mapBarangays = useMemo(() => barangays
     .filter(b => b.lat != null && b.lng != null)
     .map(b => ({
       id: b.id, name: b.name, lat: Number(b.lat), lng: Number(b.lng),
       population: b.population, elevation_m: b.elevation_m,
       risk_score: b.risk_score,
       risk_level: b.risk_level,
-    }));
+    })), [barangays]);
     
-  const mapSensors = sensors
+  const mapSensors = useMemo(() => sensors
     .filter(s => s.lat != null && s.lng != null)
-    .map(s => ({ id: s.id, name: s.name, lat: Number(s.lat), lng: Number(s.lng), status: s.status, type: s.type }));
+    .map(s => ({ id: s.id, name: s.name, lat: Number(s.lat), lng: Number(s.lng), status: s.status, type: s.type })), [sensors]);
     
-  const mapCenters = centers
+  const mapCenters = useMemo(() => centers
     .filter(c => c.lat != null && c.lng != null)
-    .map(c => ({ id: c.id, name: c.name, lat: Number(c.lat), lng: Number(c.lng), capacity: c.capacity, occupancy: c.occupancy }));
+    .map(c => ({ id: c.id, name: c.name, lat: Number(c.lat), lng: Number(c.lng), capacity: c.capacity, occupancy: c.occupancy })), [centers]);
+
+  const mapRoutes = useMemo(() => routeCoords.length ? [{ coords: routeCoords }] : [], [routeCoords]);
 
   return (
     <div className="space-y-6">
@@ -202,7 +204,7 @@ export default function GIS() {
 
         <GISMap
           className="h-[640px]"
-          routes={routeCoords.length ? [{ coords: routeCoords }] : []}
+          routes={mapRoutes}
           barangays={mapBarangays}
           sensors={mapSensors}
           centers={mapCenters}
