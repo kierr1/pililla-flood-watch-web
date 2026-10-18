@@ -162,7 +162,7 @@ export default function GIS() {
       )}
 
       <div className="relative">
-        <div className="absolute top-3 right-16 z-20 glass-panel px-3 py-1.5 flex items-center gap-2 pointer-events-none">
+        <div className="absolute top-[4.4rem] left-3 right-3 sm:left-auto sm:right-16 sm:top-3 z-20 glass-panel px-3 py-1.5 flex items-center justify-center gap-2 pointer-events-none w-fit max-w-[calc(100%-1.5rem)] mx-auto sm:mx-0">
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-75 animate-ping" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
@@ -180,7 +180,7 @@ export default function GIS() {
         )}
         {/* --- Route Status Panel --- */}
         {routingDestination && (
-          <div className="absolute top-3 left-3 z-20 glass-panel px-3 py-2 flex items-center gap-3">
+          <div className="absolute top-28 left-3 right-3 sm:top-16 sm:right-auto z-20 glass-panel px-3 py-2 flex items-center gap-3 w-fit max-w-[calc(100%-1.5rem)]">
             <Navigation className="h-4 w-4 text-primary animate-pulse" />
             <div className="flex flex-col">
               <span className="mono-font text-[10px] uppercase tracking-wider text-muted-foreground">
