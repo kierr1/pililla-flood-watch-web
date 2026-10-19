@@ -87,19 +87,35 @@ export function useOpenMeteo() {
   const [forecast, setForecast] = useState<ForecastPoint[]>(cached?.points ?? []);
   const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
+  const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
     let active = true;
-    requestForecast().then(data => {
-      if (!active) return;
-      setCurrent(data.current); setForecast(data.points); setError(null);
-    }).catch(e => { if (active) setError(e instanceof Error ? e.message : "Weather unavailable"); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      requestForecast().then(data => {
+        if (!active) return;
+        setCurrent(data.current); setForecast(data.points); setError(null);
+      }).catch(e => {
+        if (active) {
+          setError(e instanceof Error ? e.message : "Weather unavailable");
+          // Do not display stale rainfall as a current forecast when requests fail.
+          setForecast([]);
+        }
+      }).finally(() => { if (active) setLoading(false); });
+    };
+    refresh();
+    const timer = window.setInterval(() => { setClock(Date.now()); refresh(); }, 60 * 1000);
+    const onVisible = () => { if (document.visibilityState === "visible") { setClock(Date.now()); refresh(); } };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { active = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
   }, []);
-  const upcoming = forecast.filter(p => new Date(p.forecast_for).getTime() >= Date.now());
+  // First forecast hour that has not already started; avoid showing a past hour.
+  const nextHour = forecast.find(p => new Date(p.forecast_for).getTime() > clock);
+  const nextHourRainfall = nextHour ? nextHour.rain_mm : null;
+  const upcoming = forecast.filter(p => new Date(p.forecast_for).getTime() >= clock);
   const next24 = upcoming.slice(0, 24);
   const averageRainfall = next24.length
     ? next24.reduce((sum, p) => sum + p.rain_mm, 0) / next24.length
     : null;
-  return { current, forecast, loading, error, averageRainfall };
+  return { current, forecast, loading, error, averageRainfall, nextHourRainfall };
 }
