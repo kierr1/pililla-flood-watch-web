@@ -111,26 +111,7 @@ export default function Admin() {
         )}
       </Panel>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <CsvUploadPanel onComplete={refresh} />
-
-        <Panel label="THRESHOLDS" title="Flood & Weather Triggers">
-          <div className="space-y-3 text-sm">
-            {[
-              { label: "Moderate risk score ≥", value: "35" },
-              { label: "High risk score ≥", value: "55" },
-              { label: "Critical risk score ≥", value: "75" },
-              { label: "Rainfall warning ≥", value: "25 mm/h" },
-              { label: "Water-level alarm ≥", value: "3.0 m" },
-            ].map(t => (
-              <div key={t.label} className="flex items-center justify-between p-2.5 rounded bg-surface-2/60 border border-primary/15">
-                <span>{t.label}</span>
-                <span className="mono-font font-bold text-primary">{t.value}</span>
-              </div>
-            ))}
-          </div>
-        </Panel>
-      </div>
+      <CsvUploadPanel onComplete={refresh} />
 
       <QuickAddPanel />
     </div>
@@ -194,7 +175,7 @@ function CsvUploadPanel({ onComplete }: { onComplete: () => void }) {
 }
 
 function QuickAddPanel() {
-  const [kind, setKind] = useState<"barangay" | "sensor" | "center" | "alert">("alert");
+  const [kind, setKind] = useState<"barangay" | "center" | "alert">("alert");
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
 
@@ -209,9 +190,6 @@ function QuickAddPanel() {
       if (kind === "barangay") {
         table = "barangays";
         row = { name: form.name, population: numOrNull(form.population), elevation_m: numOrNull(form.elevation_m), lat: numOrNull(form.lat), lng: numOrNull(form.lng) };
-      } else if (kind === "sensor") {
-        table = "sensor_stations";
-        row = { name: form.name, type: form.type || null, status: form.status || "online", lat: numOrNull(form.lat), lng: numOrNull(form.lng) };
       } else if (kind === "center") {
         table = "evacuation_centers";
         row = { name: form.name, capacity: numOrNull(form.capacity), occupancy: numOrNull(form.occupancy) ?? 0, status: form.status || "available", lat: numOrNull(form.lat), lng: numOrNull(form.lng) };
@@ -233,7 +211,7 @@ function QuickAddPanel() {
   return (
     <Panel label="QUICK ADD" title="Insert single record">
       <div className="flex gap-2 flex-wrap mb-3">
-        {(["alert", "barangay", "sensor", "center"] as const).map(k => (
+        {(["alert", "barangay", "center"] as const).map(k => (
           <button key={k} onClick={() => { setKind(k); setForm({}); }} className={`mono-font text-xs px-3 py-1.5 rounded border ${kind === k ? "border-primary/60 bg-primary/15 text-primary" : "border-primary/20 text-muted-foreground"}`}>
             {k.toUpperCase()}
           </button>
@@ -254,15 +232,6 @@ function QuickAddPanel() {
             <Field label="Name" value={form.name ?? ""} onChange={v => set("name", v)} required />
             <Field label="Population" value={form.population ?? ""} onChange={v => set("population", v)} type="number" />
             <Field label="Elevation (m)" value={form.elevation_m ?? ""} onChange={v => set("elevation_m", v)} type="number" />
-            <Field label="Latitude" value={form.lat ?? ""} onChange={v => set("lat", v)} type="number" />
-            <Field label="Longitude" value={form.lng ?? ""} onChange={v => set("lng", v)} type="number" />
-          </>
-        )}
-        {kind === "sensor" && (
-          <>
-            <Field label="Name" value={form.name ?? ""} onChange={v => set("name", v)} required />
-            <Field label="Type" value={form.type ?? ""} onChange={v => set("type", v)} placeholder="river_gauge" />
-            <SelectField label="Status" value={form.status ?? "online"} onChange={v => set("status", v)} options={["online", "degraded", "offline"]} />
             <Field label="Latitude" value={form.lat ?? ""} onChange={v => set("lat", v)} type="number" />
             <Field label="Longitude" value={form.lng ?? ""} onChange={v => set("lng", v)} type="number" />
           </>
