@@ -8,6 +8,7 @@ import {
 import { useOpenMeteo } from "@/hooks/useOpenMeteo";
 import { useLiveSensorReading } from "@/hooks/useLiveSensorReading";
 import { predictFlood, type FloodFeatures } from "@/lib/floodModel";
+import { calculateFloodRiskIndex } from "@/lib/floodRiskIndex";
 import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
@@ -20,19 +21,6 @@ const chartTooltip = {
   },
   labelStyle: { color: "hsl(var(--muted-foreground))" },
 };
-
-const RISK_RANK: Record<string, number> = { critical: 4, high: 3, moderate: 2, low: 1 };
-
-// Provisional site-specific trigger bands; not official flood warnings.
-// Water level means height above the local datum, not ultrasonic air gap.
-type SensorRisk = "low" | "moderate" | "high" | "critical";
-function sensorFloodAlert(water: number | null | undefined, wind: number | null | undefined): SensorRisk | null {
-  if (water == null && wind == null) return null;
-  const waterRank = water == null ? 0 : water >= 1.20 ? 4 : water >= 0.75 ? 3 : water >= 0.30 ? 2 : 1;
-  // Wind bands (m/s) are provisional operational thresholds, not calibrated forecasts.
-  const windRank = wind == null ? 0 : wind >= 24.5 ? 4 : wind >= 17.2 ? 3 : wind >= 10.8 ? 2 : 1;
-  return (["low", "moderate", "high", "critical"] as const)[Math.max(waterRank, windRank) - 1];
-}
 
 export default function Dashboard() {
   const { data: barangays } = useBarangays();
@@ -77,7 +65,8 @@ export default function Dashboard() {
   const highAlerts = alerts.filter(a => a.level === "high").length;
 
   const freshLive = !!liveReading && Number.isFinite(Date.parse(liveReading.updated_at)) && (Date.now() - Date.parse(liveReading.updated_at)) < 90000 && (Date.now() - Date.parse(liveReading.updated_at)) > -10000;
-  const sensorRisk = freshLive ? sensorFloodAlert(liveReading?.water_level_m, liveReading?.wind_speed) : null;
+  const floodIndex = freshLive ? calculateFloodRiskIndex(liveReading?.water_level_m, liveReading?.wind_speed) : null;
+  const sensorRisk = floodIndex?.category ?? null;
 
   return (
     <div className="space-y-6">
@@ -101,7 +90,7 @@ export default function Dashboard() {
           value={sensorRisk ? sensorRisk.toUpperCase() : "—"}
           tone={sensorRisk ?? "default"}
           icon={<AlertTriangle className="h-5 w-5" />}
-          sub={sensorRisk ? <span className="mono-font">Live wind + water triggers · provisional</span> : <span className="mono-label">Awaiting fresh sensor data</span>}
+          sub={floodIndex ? <span className="mono-font">FRI {floodIndex.score.toFixed(1)}/100 · experimental</span> : <span className="mono-label">Awaiting valid, fresh sensor data</span>}
         />
         <MissionCard
           label="ACTIVE ALERTS"
