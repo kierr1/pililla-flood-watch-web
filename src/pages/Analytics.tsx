@@ -17,6 +17,7 @@ export default function Analytics() {
   const { data: readings, loading: readingsLoading } = useFloodReadings();
   const { data: barangays } = useBarangays();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageFailed, setImageFailed] = useState(false);
 
   function downloadReadingHistory() {
     const columns = ["Recorded At", "Station ID", "Rainfall (mm)", "Water Level (m)", "Soil Moisture (%)", "Wind Speed", "Image URL"];
@@ -141,7 +142,7 @@ export default function Analytics() {
                       {t.image_url ? (
                         <button
                           type="button"
-                          onClick={() => setSelectedImage(t.image_url)}
+                          onClick={() => { setImageFailed(false); setSelectedImage(t.image_url); }}
                           aria-label={`Open sensor image recorded at ${t.time}`}
                           className="inline-flex items-center gap-1.5 text-primary hover:underline"
                         >
@@ -163,13 +164,20 @@ export default function Analytics() {
       <Dialog open={selectedImage !== null} onOpenChange={(open) => !open && setSelectedImage(null)}>
         <DialogContent className="max-w-5xl border-primary/20 bg-background p-4 sm:p-6">
           <DialogTitle className="sr-only">Sensor image</DialogTitle>
-          {selectedImage && (
+          {selectedImage && (imageFailed ? (
+            <div role="alert" className="space-y-3 p-4 text-sm">
+              <p className="font-semibold text-risk-high">Snapshot could not be loaded.</p>
+              <p className="text-muted-foreground">The image may be missing from Supabase Storage, its link may have expired, or the storage bucket may not allow access. Check the Raspberry Pi upload log and the saved image URL.</p>
+              <a href={selectedImage} target="_blank" rel="noopener noreferrer" className="text-primary underline break-words">Open saved image URL in a new tab</a>
+            </div>
+          ) : (
             <img
               src={selectedImage}
               alt="Flood sensor reading"
+              onError={() => setImageFailed(true)}
               className="max-h-[75vh] w-full object-contain"
             />
-          )}
+          ))}
         </DialogContent>
       </Dialog>
     </div>
