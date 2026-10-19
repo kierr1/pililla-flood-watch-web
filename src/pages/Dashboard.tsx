@@ -29,7 +29,7 @@ export default function Dashboard() {
   const { data: alerts } = useAlerts();
   const { data: readings } = useFloodReadings();
   const { reading: liveReading } = useLiveSensorReading();
-  const { averageRainfall: forecastRainfall, error: weatherRainError } = useOpenMeteo();
+  const { nextHourRainfall: forecastRainfall, error: weatherRainError } = useOpenMeteo();
 
   const recent = readings.slice(0, 24);
   const avg = (arr: (number | null | undefined)[]) => {
@@ -116,7 +116,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Telemetry icon={<CloudRain className="h-4 w-4" />} label="RAINFALL (avg, forecast 1h)" value={forecastRainfall !== null ? forecastRainfall.toFixed(1) : "—"} unit="mm" />
+        <Telemetry icon={<CloudRain className="h-4 w-4" />} label="RAINFALL FORECAST (NEXT HOUR)" value={forecastRainfall !== null ? forecastRainfall.toFixed(1) : "—"} unit="mm" />
         <Telemetry icon={<Droplets className="h-4 w-4" />} label="WATER LEVEL · LIVE" value={liveReading?.water_level_m != null ? liveReading.water_level_m.toFixed(2) : "—"} unit="m" />
         <Telemetry icon={<Wind className="h-4 w-4" />} label="WIND SPEED · LIVE" value={liveReading?.wind_speed != null ? (liveReading.wind_speed * 3.6).toFixed(2) : "—"} unit="km/h" />
       </div>
