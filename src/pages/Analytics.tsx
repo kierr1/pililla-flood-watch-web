@@ -20,14 +20,14 @@ export default function Analytics() {
   const [imageFailed, setImageFailed] = useState(false);
 
   function downloadReadingHistory() {
-    const columns = ["Recorded At", "Station ID", "Rainfall (mm)", "Water Level (m)", "Soil Moisture (%)", "Wind Speed", "Image URL"];
+    const columns = ["Recorded At", "Station ID", "Rainfall (mm)", "Water Level (m)", "Soil Moisture (%)", "Wind Speed (km/h)", "Image URL"];
     const rows = readings.map(reading => [
       reading.recorded_at,
       reading.station_id ?? "",
       reading.rainfall_mm?.toString() ?? "",
       reading.water_level_m?.toString() ?? "",
       reading.soil_moisture_percent?.toString() ?? "",
-      reading.wind_speed?.toString() ?? "",
+      reading.wind_speed != null ? (reading.wind_speed * 3.6).toFixed(2) : "",
       reading.image_url ?? "",
     ]);
     const csv = [columns, ...rows]
@@ -46,7 +46,7 @@ export default function Analytics() {
 
   const trend = [...readings].slice(0, 24).reverse().map(r => ({
     time: new Date(r.recorded_at).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", hour12: false }),
-    wind_speed: r.wind_speed ?? 0,
+    wind_speed: (r.wind_speed ?? 0) * 3.6,
     water_level: r.water_level_m ?? 0,
     image_url: r.image_url ?? ""
   }));
@@ -72,7 +72,7 @@ export default function Analytics() {
                   <YAxis yAxisId="l" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10, fontFamily: "JetBrains Mono" }} stroke="hsl(var(--primary) / 0.3)" />
                   <YAxis yAxisId="r" orientation="right" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10, fontFamily: "JetBrains Mono" }} stroke="hsl(var(--risk-high) / 0.3)" />
                   <Tooltip {...tt} />
-                  <Bar yAxisId="l" dataKey="wind_speed" fill="hsl(var(--primary) / 0.6)" name="Wind Speed m/s" />
+                  <Bar yAxisId="l" dataKey="wind_speed" fill="hsl(var(--primary) / 0.6)" name="Wind Speed km/h" />
                   <Line yAxisId="r" type="monotone" dataKey="water_level" stroke="hsl(var(--risk-high))" strokeWidth={2} dot={false} name="Water (m)" />
                 </ComposedChart>
               </ResponsiveContainer>
@@ -133,7 +133,7 @@ export default function Analytics() {
                 {trend.slice(-10).reverse().map((t, i) => (
                   <tr key={i} className="border-b border-primary/5 hover:bg-primary/5">
                     <td className="py-2 pr-3">{t.time}</td>
-                    <td className="py-2 pr-3 tabular-nums">{t.wind_speed.toFixed(1)} m/s</td>
+                    <td className="py-2 pr-3 tabular-nums">{t.wind_speed.toFixed(1)} km/h</td>
                     <td className="py-2 pr-3 tabular-nums">{t.water_level.toFixed(2)} m</td>
                     <td className="py-2 pr-3">
                       {t.water_level > 2.0 ? <RiskBadge level="high" /> : t.water_level > 1.5 ? <RiskBadge level="moderate" /> : <RiskBadge level="low" />}
