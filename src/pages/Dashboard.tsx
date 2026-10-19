@@ -55,7 +55,7 @@ export default function Dashboard() {
 
   const trend = [...recent].reverse().map(r => ({
     time: new Date(r.recorded_at).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", hour12: false }),
-    wind_speed: r.wind_speed ?? 0,
+    wind_speed: (r.wind_speed ?? 0) * 3.6,
     water_level: r.water_level_m ?? 0,
   }));
 
@@ -118,7 +118,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Telemetry icon={<CloudRain className="h-4 w-4" />} label="RAINFALL (avg, forecast 1h)" value={forecastRainfall !== null ? forecastRainfall.toFixed(1) : "—"} unit="mm" />
         <Telemetry icon={<Droplets className="h-4 w-4" />} label="WATER LEVEL · LIVE" value={liveReading?.water_level_m != null ? liveReading.water_level_m.toFixed(2) : "—"} unit="m" />
-        <Telemetry icon={<Wind className="h-4 w-4" />} label="WIND SPEED · LIVE" value={liveReading?.wind_speed != null ? liveReading.wind_speed.toFixed(2) : "—"} unit="m/s" />
+        <Telemetry icon={<Wind className="h-4 w-4" />} label="WIND SPEED · LIVE" value={liveReading?.wind_speed != null ? (liveReading.wind_speed * 3.6).toFixed(2) : "—"} unit="km/h" />
       </div>
 
       {weatherRainError && <p className="text-xs text-muted-foreground">Open-Meteo rainfall forecast: {weatherRainError}</p>}
@@ -150,7 +150,7 @@ export default function Dashboard() {
                   <XAxis dataKey="time" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10, fontFamily: "JetBrains Mono" }} stroke="hsl(var(--primary) / 0.3)" />
                   <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10, fontFamily: "JetBrains Mono" }} stroke="hsl(var(--primary) / 0.3)" />
                   <Tooltip {...chartTooltip} />
-                  <Area type="monotone" dataKey="wind_speed" name="Wind Speed (m/s)" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#g-wind)" />
+                  <Area type="monotone" dataKey="wind_speed" name="Wind Speed (km/h)" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#g-wind)" />
                   <Area type="monotone" dataKey="water_level" name="Water (m)" stroke="hsl(var(--risk-high))" strokeWidth={2} fill="url(#g-water)" />
                 </AreaChart>
               </ResponsiveContainer>
