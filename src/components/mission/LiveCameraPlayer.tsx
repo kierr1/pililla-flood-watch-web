@@ -77,7 +77,7 @@ export default function LiveCameraPlayer() {
   return (
     <div className="mx-auto max-w-4xl overflow-hidden rounded border border-primary/20 bg-black">
       <div className="relative aspect-video w-full">
-        <video ref={video} autoPlay playsInline muted controls className="h-full w-full object-contain" style={{ transform: "scaleY(-1)" }} />
+        <video ref={video} autoPlay playsInline muted controls className="h-full w-full object-contain" style={{ transform: "rotate(180deg)" }} />
         {status !== "Live" && <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 p-6 text-center">
           <VideoOff className="h-8 w-8 text-muted-foreground" />
           <p className="text-sm text-foreground">{status}</p>
