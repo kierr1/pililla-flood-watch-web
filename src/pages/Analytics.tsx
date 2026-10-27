@@ -175,7 +175,7 @@ export default function Analytics() {
               src={selectedImage}
               alt="Flood sensor reading"
               onError={() => setImageFailed(true)}
-              className="max-h-[75vh] w-full object-contain"
+              className="max-h-[75vh] w-full object-contain" style={{ transform: "rotate(180deg)" }}
             />
           ))}
         </DialogContent>
