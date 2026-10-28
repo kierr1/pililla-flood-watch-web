@@ -168,8 +168,8 @@ function pdf(rows: string[][], logo: { pixels: Uint8Array; width: number; height
     offsets.push(length);
     if (i === 5) {
       const hex = Array.from(logo.pixels, byte => byte.toString(16).padStart(2, "0")).join("") + ">";
-      write("5 0 obj\\n<< /Type /XObject /Subtype /Image /Width " + logo.width + " /Height " + logo.height + " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length " + hex.length + " >>\\nstream\\n");
-      write(hex); write("\\nendstream\\nendobj\\n");
+      write("5 0 obj\n<< /Type /XObject /Subtype /Image /Width " + logo.width + " /Height " + logo.height + " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length " + hex.length + " >>\nstream\n");
+      write(hex); write("\nendstream\nendobj\n");
     } else { write(i + " 0 obj\n"); write(objects[i]); write("\nendobj\n"); }
   }
   const xref = length;
