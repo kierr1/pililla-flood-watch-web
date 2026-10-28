@@ -82,7 +82,29 @@ function xlsx(rows: string[][], logo: Uint8Array) {
     { name: "xl/worksheets/sheet1.xml", data: '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="1" width="25" customWidth="1"/><col min="2" max="2" width="38" customWidth="1"/><col min="3" max="4" width="19" customWidth="1"/><col min="5" max="5" width="85" customWidth="1"/></cols><sheetData>' + branding + xmlRows + '</sheetData><autoFilter ref="A7:E' + (rows.length + 7) + '"/><drawing xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1"/></worksheet>' },
   ]);
 }
-function pdf(rows: string[][], logo: Uint8Array): Uint8Array {
+async function logoRgbPixels(): Promise<{ pixels: Uint8Array; width: number; height: number }> {
+  const response = await fetch("/export-logo.jpg", { cache: "no-store" });
+  if (!response.ok) throw new Error("Export logo could not be loaded");
+  const bitmap = await createImageBitmap(await response.blob());
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Cannot render export logo");
+    context.drawImage(bitmap, 0, 0);
+    const rgba = context.getImageData(0, 0, bitmap.width, bitmap.height).data;
+    const rgb = new Uint8Array(bitmap.width * bitmap.height * 3);
+    for (let i = 0, j = 0; i < rgba.length; i += 4) {
+      rgb[j++] = rgba[i]; rgb[j++] = rgba[i + 1]; rgb[j++] = rgba[i + 2];
+    }
+    return { pixels: rgb, width: bitmap.width, height: bitmap.height };
+  } finally {
+    bitmap.close();
+  }
+}
+
+function pdf(rows: string[][], logo: { pixels: Uint8Array; width: number; height: number }): Uint8Array {
   const esc = (v: string) => v.replace(/[^\x20-\x7e]/g, "?").replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
   const pages: string[] = [];
   let commands: string[] = [], y = 0, count = 0;
@@ -145,8 +167,9 @@ function pdf(rows: string[][], logo: Uint8Array): Uint8Array {
   for (let i = 1; i < objects.length; i++) {
     offsets.push(length);
     if (i === 5) {
-      write("5 0 obj\n<< /Type /XObject /Subtype /Image /Width 96 /Height 96 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + logo.length + " >>\nstream\n");
-      write(logo); write("\nendstream\nendobj\n");
+      const hex = Array.from(logo.pixels, byte => byte.toString(16).padStart(2, "0")).join("") + ">";
+      write("5 0 obj\\n<< /Type /XObject /Subtype /Image /Width " + logo.width + " /Height " + logo.height + " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length " + hex.length + " >>\\nstream\\n");
+      write(hex); write("\\nendstream\\nendobj\\n");
     } else { write(i + " 0 obj\n"); write(objects[i]); write("\nendobj\n"); }
   }
   const xref = length;
@@ -167,6 +190,6 @@ export async function exportSensorHistory(readings: FloodReading[], format: Expo
   } else if (format === "excel") {
     download(xlsx(rows, await loadLogoBytes()), name + ".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   } else {
-    download(pdf(rows, await loadLogoBytes()), name + ".pdf", "application/pdf");
+    download(pdf(rows, await logoRgbPixels()), name + ".pdf", "application/pdf");
   }
 }
