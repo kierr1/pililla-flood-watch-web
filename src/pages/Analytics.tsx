@@ -2,6 +2,7 @@ import { Panel, PageHeader, RiskBadge } from "@/components/mission/Panel";
 import { EmptyState } from "@/components/mission/EmptyState";
 import { useFloodReadings, useBarangays } from "@/hooks/useData";
 import { useState } from "react";
+import { exportSensorHistory, type ExportFormat } from "@/lib/exportSensorHistory";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -18,31 +19,7 @@ export default function Analytics() {
   const { data: barangays } = useBarangays();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
-
-  function downloadReadingHistory() {
-    const columns = ["Recorded At", "Station ID", "Rainfall (mm)", "Water Level (m)", "Soil Moisture (%)", "Wind Speed (km/h)", "Image URL"];
-    const rows = readings.map(reading => [
-      reading.recorded_at,
-      reading.station_id ?? "",
-      reading.rainfall_mm?.toString() ?? "",
-      reading.water_level_m?.toString() ?? "",
-      reading.soil_moisture_percent?.toString() ?? "",
-      reading.wind_speed != null ? (reading.wind_speed * 3.6).toFixed(2) : "",
-      reading.image_url ?? "",
-    ]);
-    const csv = [columns, ...rows]
-      .map(row => row.map(value => `"${value.replace(/"/g, '""')}"`).join(","))
-      .join("\r\n");
-    const file = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(file);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `flood-reading-history-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("csv");
 
   const trend = [...readings].slice(0, 24).reverse().map(r => ({
     time: new Date(r.recorded_at).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", hour12: false }),
@@ -104,15 +81,29 @@ export default function Analytics() {
         label="EVENT LOG"
         title="Recent Sensor Readings"
         action={
-          <button
-            type="button"
-            onClick={downloadReadingHistory}
-            disabled={readingsLoading || readings.length === 0}
-            className="inline-flex items-center gap-2 rounded border border-primary/40 px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Download className="h-3.5 w-3.5" />
-            Download History
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor="sensor-export-format" className="mono-font text-[10px] tracking-widest text-muted-foreground">EXPORT AS</label>
+            <select
+              id="sensor-export-format"
+              value={exportFormat}
+              onChange={e => setExportFormat(e.target.value as ExportFormat)}
+              aria-label="Sensor history export format"
+              className="min-h-9 rounded border border-primary/40 bg-surface-2 px-3 py-1.5 text-xs font-semibold text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary/40"
+            >
+              <option value="csv">CSV (.csv)</option>
+              <option value="excel">Excel (.xlsx)</option>
+              <option value="pdf">PDF (.pdf)</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => exportSensorHistory(readings, exportFormat)}
+              disabled={readingsLoading || readings.length === 0}
+              className="inline-flex min-h-9 items-center gap-2 rounded border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export History
+            </button>
+          </div>
         }
       >
         {trend.length === 0 ? (
