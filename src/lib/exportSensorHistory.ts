@@ -92,7 +92,7 @@ function pdf(rows: string[][]): Uint8Array {
     rect(0, 0, 842, 595, "1 1 1");
     rect(0, 502, 842, 93, "0.03 0.16 0.59");
     rect(0, 497, 842, 5, "0.09 0.74 1");
-    commands.push("q 66 0 0 66 40 516 cm /Logo Do Q");
+    commands.push("q 72 0 0 72 724 514 cm /Logo Do Q");
     label(120, 557, "PILILLA FLOOD WATCH", 21, "1 1 1", "F2");
     label(120, 535, "RECENT SENSOR READINGS  /  OFFICIAL EXPORT", 10, "0.70 0.94 1", "F2");
     label(40, 465, "HISTORICAL SENSOR REPORT", 14, "0.05 0.20 0.55", "F2");
