@@ -4,8 +4,18 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { ImageMagick, initializeImageMagick, MagickFormat } from "npm:@imagemagick/magick-wasm@^0";
 
-const wasm = await Deno.readFile(new URL("magick.wasm", import.meta.resolve("npm:@imagemagick/magick-wasm@^0")));
-await initializeImageMagick(wasm);
+// Initialize WASM only after authorization, validation, dry run, and backup.
+// Top-level initialization previously caused WORKER_ERROR before requests were handled.
+let magickReady: Promise<void> | undefined;
+function ensureMagick(): Promise<void> {
+  if (!magickReady) {
+    magickReady = (async () => {
+      const wasm = await Deno.readFile(new URL("magick.wasm", import.meta.resolve("npm:@imagemagick/magick-wasm@^0")));
+      await initializeImageMagick(wasm);
+    })().catch(error => { magickReady = undefined; throw error; });
+  }
+  return magickReady;
+}
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return Response.json({ error: "POST required" }, { status: 405 });
@@ -32,6 +42,7 @@ Deno.serve(async (req) => {
     const { data: original, error: downloadError } = await bucket.download(path);
     if (downloadError || !original) throw downloadError ?? Error("File unavailable");
     const raw = new Uint8Array(await original.arrayBuffer());
+    await ensureMagick();
     const rotated = ImageMagick.read(raw, image => {
       image.rotate(180);
       return image.write(MagickFormat.Jpeg, data => Uint8Array.from(data));
