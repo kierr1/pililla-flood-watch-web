@@ -27,7 +27,26 @@ Deno.serve(async (req) => {
 
   let stage = "parse_request";
   try {
-    const body =  await req.json() as { path?: string; confirm?: boolean };
+    const body = await req.json() as { action?: string; path?: string; confirm?: boolean; prefix?: string; offset?: number };
+    if (body.action === "list") {
+      // Paginated listing: the caller follows folders and pages without a service-role key.
+      const prefix = (body.prefix ?? "").replace(/^\/+|\/+$/g, "");
+      if (prefix.includes("..") || prefix === "_rotation_backups" || prefix.startsWith("_rotation_backups/"))
+        return Response.json({ error: "Invalid listing prefix" }, { status: 400 });
+      const offset = Number.isInteger(body.offset) && body.offset! >= 0 ? body.offset! : 0;
+      if (offset > 100000) return Response.json({ error: "Offset too large" }, { status: 400 });
+      const client = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const { data, error } = await client.storage.from("image_readings").list(prefix, {
+        limit: 100, offset, sortBy: { column: "name", order: "asc" }
+      });
+      if (error) throw error;
+      const entries = (data ?? []).filter(item => !(prefix === "" && item.name === "_rotation_backups")).map(item => ({
+        path: [prefix, item.name].filter(Boolean).join("/"),
+        folder: !item.id,
+        jpeg: /\.jpe?g$/i.test(item.name)
+      }));
+      return Response.json({ status: "listed", entries, hasMore: (data ?? []).length === 100 });
+    }
     const path = body.path?.replace(/^\/+/, "");
     if (!path || !/\.jpe?g$/i.test(path) || path.includes("..") || path.startsWith("_rotation_backups/"))
       return Response.json({ error: "A valid JPEG path in image_readings is required" }, { status: 400 });
