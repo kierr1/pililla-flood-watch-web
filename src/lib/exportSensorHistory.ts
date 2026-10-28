@@ -1,11 +1,10 @@
 import type { FloodReading } from "@/hooks/useData";
 
 export type ExportFormat = "csv" | "excel" | "pdf";
-const heads = ["Recorded At", "Station ID", "Rainfall (mm)", "Water Level (m)", "Soil Moisture (%)", "Wind Speed (km/h)", "Image URL"];
+const heads = ["Recorded At", "Station ID", "Water Level (m)", "Wind Speed (km/h)", "Image URL"];
 const enc = new TextEncoder();
 function rowsOf(readings: FloodReading[]) {
-  return readings.map(r => [r.recorded_at, r.station_id ?? "", r.rainfall_mm?.toString() ?? "",
-    r.water_level_m?.toString() ?? "", r.soil_moisture_percent?.toString() ?? "",
+  return readings.map(r => [r.recorded_at, r.station_id ?? "", r.water_level_m?.toString() ?? "",
     r.wind_speed == null ? "" : (r.wind_speed * 3.6).toFixed(2),
     !r.image_url || r.image_url === "#" ? "" : r.image_url]);
 }
@@ -54,7 +53,7 @@ function xlsx(rows: string[][]) {
   const xmlRows = [heads, ...rows].map((row, i) => {
     const cols = row.map((val, j) => {
       const addr = String.fromCharCode(65 + j) + (i + 1);
-      const num = i > 0 && j >= 2 && j <= 5 && val !== "" && Number.isFinite(+val);
+      const num = i > 0 && j >= 2 && j <= 3 && val !== "" && Number.isFinite(+val);
       return num ? '<c r="' + addr + '"><v>' + Number(val) + '</v></c>' :
         '<c r="' + addr + '" t="inlineStr"><is><t>' + xml(val.replace(/[\x00-\x1f]/g, "")) + '</t></is></c>';
     }).join("");
@@ -65,51 +64,81 @@ function xlsx(rows: string[][]) {
     { name: "_rels/.rels", data: '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
     { name: "xl/workbook.xml", data: '<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sensor History" sheetId="1" r:id="rId1"/></sheets></workbook>' },
     { name: "xl/_rels/workbook.xml.rels", data: '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>' },
-    { name: "xl/worksheets/sheet1.xml", data: '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="1" width="25" customWidth="1"/><col min="2" max="2" width="38" customWidth="1"/><col min="3" max="6" width="19" customWidth="1"/><col min="7" max="7" width="85" customWidth="1"/></cols><sheetData>' + xmlRows + '</sheetData><autoFilter ref="A1:G' + (rows.length + 1) + '"/></worksheet>' },
+    { name: "xl/worksheets/sheet1.xml", data: '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="1" width="25" customWidth="1"/><col min="2" max="2" width="38" customWidth="1"/><col min="3" max="4" width="19" customWidth="1"/><col min="5" max="5" width="85" customWidth="1"/></cols><sheetData>' + xmlRows + '</sheetData><autoFilter ref="A1:E' + (rows.length + 1) + '"/></worksheet>' },
   ]);
 }
 function pdf(rows: string[][]) {
   const esc = (s: string) => s.replace(/[^\x20-\x7e]/g, "?").replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
-  let y = 0; let ops: string[] = []; const pages: string[] = [];
-  const put = (x: number, value: string, size = 8) => ops.push('BT /F1 ' + size + ' Tf 1 0 0 1 ' + x + ' ' + y + ' Tm (' + esc(value) + ') Tj ET');
-  function start() {
-    if (ops.length) pages.push(ops.join("\n"));
-    ops = []; y = 550;
-    put(38, "PILILLA FLOOD WATCH  |  SENSOR HISTORY", 16); y -= 24;
-    put(38, "Historical readings - Wind in km/h - " + new Date().toISOString().slice(0, 10), 9);
-    y -= 28;
-    put(38, "RECORDED AT"); put(200, "STATION ID"); put(400, "RAIN"); put(460, "WATER");
-    put(525, "SOIL"); put(590, "WIND"); y -= 18;
-  }
-  start();
+  const pages: string[][] = [];
+  let ops: string[] = [];
+  let y = 0;
+  let onPage = 0;
+  const rectangle = (x: number, bottom: number, w: number, h: number, rgb: string) =>
+    ops.push(rgb + " rg " + x + " " + bottom + " " + w + " " + h + " re f");
+  const text = (x: number, baseline: number, value: string, size = 9, color = "0.15 0.25 0.25", font = "F1") =>
+    ops.push(color + " rg BT /" + font + " " + size + " Tf 1 0 0 1 " + x + " " + baseline + " Tm (" + esc(value) + ") Tj ET");
+  const newPage = () => {
+    if (ops.length) pages.push(ops);
+    ops = []; onPage = 0;
+    rectangle(0, 0, 842, 595, "1 1 1");
+    rectangle(0, 510, 842, 85, "0.05 0.16 0.16");
+    rectangle(0, 503, 842, 7, "0.16 0.69 0.48");
+    text(38, 566, "PILILLA FLOOD WATCH", 20, "1 1 1", "F2");
+    text(39, 540, "SENSOR MONITORING  /  HISTORICAL REPORT", 10, "0.57 0.88 0.76", "F2");
+    text(38, 474, "RECENT SENSOR READINGS", 13, "0.06 0.22 0.20", "F2");
+    text(38, 455, "Generated " + new Date().toLocaleString("en-PH") + "     |     " + rows.length + " records     |     Wind speed: km/h", 9);
+    rectangle(38, 416, 766, 28, "0.09 0.26 0.24");
+    text(48, 426, "RECORDED AT", 9, "1 1 1", "F2");
+    text(225, 426, "STATION ID", 9, "1 1 1", "F2");
+    text(489, 426, "WATER (m)", 9, "1 1 1", "F2");
+    text(638, 426, "WIND (km/h)", 9, "1 1 1", "F2");
+    rectangle(38, 28, 766, 1, "0.77 0.83 0.80");
+    text(38, 14, "PILILLA FLOOD WATCH   /   HISTORICAL SENSOR RECORDS", 7, "0.42 0.50 0.48");
+    y = 411;
+  };
+  newPage();
   for (const row of rows) {
-    const urlLines = row[6] ? (row[6].match(/.{1,118}/g) ?? []) : [];
-    if (y < 55 + urlLines.length * 11) start();
-    put(38, row[0].replace("T", " ").slice(0, 25)); put(200, row[1].slice(0, 33));
-    put(400, row[2]); put(460, row[3]); put(525, row[4]); put(590, row[5]);
-    y -= 13;
-    for (const part of urlLines) { put(38, "Image URL: " + part, 7); y -= 11; }
-    y -= 10;
+    const image = row[4] || "";
+    // Each snapshot link stays as a separate line beneath its sensor reading.
+    const links = image ? (image.match(/.{1,125}/g) ?? []) : [];
+    const height = 30 + links.length * 11;
+    if (y - height < 43) newPage();
+    if (onPage % 2 === 0) rectangle(38, y - height + 3, 766, height, "0.94 0.97 0.96");
+    text(48, y - 15, row[0].replace("T", " ").replace("Z", " UTC").slice(0, 26), 9);
+    text(225, y - 15, row[1].slice(0, 37), 8);
+    text(489, y - 15, row[2] || "-", 10, "0.05 0.33 0.27", "F2");
+    text(638, y - 15, row[3] || "-", 10, "0.05 0.33 0.27", "F2");
+    links.forEach((part, idx) => text(48, y - 30 - idx * 11,
+      (idx === 0 ? "Snapshot: " : "") + part, 7, "0.30 0.41 0.39"));
+    y -= height;
+    onPage++;
   }
-  pages.push(ops.join("\n"));
+  pages.push(ops);
   const objects = ["", "<< /Type /Catalog /Pages 2 0 R >>", "",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"];
-  const kids: string[] = [];
-  for (const stream of pages) {
-    const pid = objects.length, sid = pid + 1; kids.push(pid + " 0 R");
-    objects.push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R >> >> /Contents ' + sid + ' 0 R >>');
-    objects.push('<< /Length ' + enc.encode(stream).length + ' >>\nstream\n' + stream + '\nendstream');
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>"];
+  const ids: string[] = [];
+  for (const [index, commands] of pages.entries()) {
+    const page = objects.length, stream = page + 1;
+    ids.push(page + " 0 R");
+    // Add page number just above the footer.
+    commands.push("0.32 0.42 0.40 rg BT /F1 8 Tf 1 0 0 1 729 14 Tm (Page " + (index + 1) + " / " + pages.length + ") Tj ET");
+    const content = commands.join("\n");
+    objects.push("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents " + stream + " 0 R >>");
+    objects.push("<< /Length " + enc.encode(content).length + " >>\nstream\n" + content + "\nendstream");
   }
-  objects[2] = '<< /Type /Pages /Kids [' + kids.join(" ") + '] /Count ' + kids.length + ' >>';
-  let document = "%PDF-1.4\n"; const offsets = [0];
+  objects[2] = "<< /Type /Pages /Kids [" + ids.join(" ") + "] /Count " + ids.length + " >>";
+  let document = "%PDF-1.4\n";
+  const offsets = [0];
   for (let i = 1; i < objects.length; i++) {
     offsets.push(enc.encode(document).length);
-    document += i + ' 0 obj\n' + objects[i] + '\nendobj\n';
+    document += i + " 0 obj\n" + objects[i] + "\nendobj\n";
   }
-  const xref = enc.encode(document).length;
-  document += 'xref\n0 ' + objects.length + '\n0000000000 65535 f \n';
-  for (let i = 1; i < objects.length; i++) document += String(offsets[i]).padStart(10, "0") + ' 00000 n \n';
-  document += 'trailer\n<< /Size ' + objects.length + ' /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF';
+  const at = enc.encode(document).length;
+  document += "xref\n0 " + objects.length + "\n0000000000 65535 f \n";
+  for (let i = 1; i < objects.length; i++)
+    document += String(offsets[i]).padStart(10, "0") + " 00000 n \n";
+  document += "trailer\n<< /Size " + objects.length + " /Root 1 0 R >>\nstartxref\n" + at + "\n%%EOF";
   return enc.encode(document);
 }
 export function exportSensorHistory(readings: FloodReading[], format: ExportFormat) {
