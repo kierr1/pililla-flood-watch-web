@@ -1,10 +1,13 @@
-import { EXPORT_LOGO_JPEG_BASE64 } from "./exportBrandLogo";
 import type { FloodReading } from "@/hooks/useData";
 
 export type ExportFormat = "csv" | "excel" | "pdf";
 const heads = ["Recorded At", "Station ID", "Water Level (m)", "Wind Speed (km/h)", "Image URL"];
 const enc = new TextEncoder();
-const logoBytes = () => Uint8Array.from(atob(EXPORT_LOGO_JPEG_BASE64), c => c.charCodeAt(0));
+async function loadLogoBytes(): Promise<Uint8Array> {
+  const response = await fetch("/export-logo.jpg");
+  if (!response.ok) throw new Error("Unable to load export logo");
+  return new Uint8Array(await response.arrayBuffer());
+}
 function rowsOf(readings: FloodReading[]) {
   return readings.map(r => [r.recorded_at, r.station_id ?? "", r.water_level_m?.toString() ?? "",
     r.wind_speed == null ? "" : (r.wind_speed * 3.6).toFixed(2),
@@ -51,7 +54,7 @@ function zip(files: { name: string; data: string | Uint8Array }[]) {
   let p = 0; for (const chunk of chunks) { out.set(chunk, p); p += chunk.length; }
   return out;
 }
-function xlsx(rows: string[][]) {
+function xlsx(rows: string[][], logo: Uint8Array) {
   const branding = '<row r="1" ht="53" customHeight="1"><c r="B1" s="1" t="inlineStr"><is><t>PILILLA FLOOD WATCH</t></is></c></row>'
     + '<row r="2"><c r="B2" s="2" t="inlineStr"><is><t>SENSOR HISTORY / DATA EXPORT</t></is></c></row>'
     + '<row r="4"><c r="A4" s="3" t="inlineStr"><is><t>RECENT SENSOR READINGS</t></is></c></row>'
@@ -67,7 +70,7 @@ function xlsx(rows: string[][]) {
     return '<row r="' + rowIndex + '">' + cols + '</row>';
   }).join("");
   return zip([
-    { name: "xl/media/logo.jpg", data: logoBytes() },
+    { name: "xl/media/logo.jpg", data: logo },
     { name: "xl/drawings/drawing1.xml", data: '<?xml version="1.0"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="685800" cy="685800"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Pililla Flood Watch Logo"/><xdr:cNvPicPr/></xdr:nvPicPr><xdr:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>' },
     { name: "xl/drawings/_rels/drawing1.xml.rels", data: '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/logo.jpg"/></Relationships>' },
     { name: "xl/worksheets/_rels/sheet1.xml.rels", data: '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>' },
@@ -79,7 +82,7 @@ function xlsx(rows: string[][]) {
     { name: "xl/worksheets/sheet1.xml", data: '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="1" width="25" customWidth="1"/><col min="2" max="2" width="38" customWidth="1"/><col min="3" max="4" width="19" customWidth="1"/><col min="5" max="5" width="85" customWidth="1"/></cols><sheetData>' + branding + xmlRows + '</sheetData><autoFilter ref="A7:E' + (rows.length + 7) + '"/><drawing xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1"/></worksheet>' },
   ]);
 }
-function pdf(rows: string[][]): Uint8Array {
+function pdf(rows: string[][], logo: Uint8Array): Uint8Array {
   const esc = (v: string) => v.replace(/[^\x20-\x7e]/g, "?").replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
   const pages: string[] = [];
   let commands: string[] = [], y = 0, count = 0;
@@ -121,7 +124,6 @@ function pdf(rows: string[][]): Uint8Array {
     count++;
   }
   pages.push(commands.join("\n"));
-  const logo = logoBytes();
   const parts: Uint8Array[] = [];
   let length = 0;
   const offsets: number[] = [0];
@@ -143,7 +145,7 @@ function pdf(rows: string[][]): Uint8Array {
   for (let i = 1; i < objects.length; i++) {
     offsets.push(length);
     if (i === 5) {
-      write("5 0 obj\n<< /Type /XObject /Subtype /Image /Width 128 /Height 128 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + logo.length + " >>\nstream\n");
+      write("5 0 obj\n<< /Type /XObject /Subtype /Image /Width 96 /Height 96 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + logo.length + " >>\nstream\n");
       write(logo); write("\nendstream\nendobj\n");
     } else { write(i + " 0 obj\n"); write(objects[i]); write("\nendobj\n"); }
   }
@@ -155,7 +157,7 @@ function pdf(rows: string[][]): Uint8Array {
   for (const part of parts) { out.set(part, pos); pos += part.length; }
   return out;
 }
-export function exportSensorHistory(readings: FloodReading[], format: ExportFormat) {
+export async function exportSensorHistory(readings: FloodReading[], format: ExportFormat) {
   if (!readings.length) return;
   const rows = rowsOf(readings);
   const name = "pililla-sensor-history-" + new Date().toISOString().slice(0, 10);
@@ -163,8 +165,8 @@ export function exportSensorHistory(readings: FloodReading[], format: ExportForm
     const csv = [heads, ...rows].map(r => r.map(v => '"' + v.replace(/"/g, '""') + '"').join(",")).join("\r\n");
     download("\uFEFF" + csv, name + ".csv", "text/csv;charset=utf-8");
   } else if (format === "excel") {
-    download(xlsx(rows), name + ".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    download(xlsx(rows, await loadLogoBytes()), name + ".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   } else {
-    download(pdf(rows), name + ".pdf", "application/pdf");
+    download(pdf(rows, await loadLogoBytes()), name + ".pdf", "application/pdf");
   }
 }
