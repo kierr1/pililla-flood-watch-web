@@ -2,26 +2,21 @@
 // Dry run is the default. This function backs up the original before replacing it.
 // Set ROTATE_ADMIN_TOKEN as a Supabase Function secret (never a frontend env variable).
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { ImageMagick, initializeImageMagick, MagickFormat } from "npm:@imagemagick/magick-wasm@^0";
+import jpeg from "npm:jpeg-js@0.4.4";
 
-// Edge runtime disallows Deno.readFile inside an HTTP request callback.
-// Read WASM synchronously during module initialization (allowed), but catch errors
-// so the worker can still respond with a useful JSON diagnostic.
-let wasmBytes: Uint8Array | undefined;
-let wasmLoadError: string | undefined;
-try {
-  wasmBytes = Deno.readFileSync(new URL("magick.wasm", import.meta.resolve("npm:@imagemagick/magick-wasm@^0")));
-} catch (error) {
-  wasmLoadError = error instanceof Error ? error.message : String(error);
-}
-let magickReady: Promise<void> | undefined;
-function ensureMagick(): Promise<void> {
-  if (!wasmBytes) return Promise.reject(Error("WASM load failed: " + wasmLoadError));
-  if (!magickReady) {
-    magickReady = initializeImageMagick(wasmBytes)
-      .catch(error => { magickReady = undefined; throw error; });
+// Pure JavaScript JPEG decoding/encoding: no external .wasm file to package.
+// The pixel array is reversed in RGBA-sized units to rotate exactly 180 degrees.
+function rotateJpeg180(input: Uint8Array): Uint8Array {
+  const decoded = jpeg.decode(input, { useTArray: true, maxResolutionInMP: 12, maxMemoryUsageInMB: 256 });
+  const pixels = decoded.data;
+  const result = new Uint8Array(pixels.length);
+  for (let i = 0, j = pixels.length - 4; i < pixels.length; i += 4, j -= 4) {
+    result[i] = pixels[j];
+    result[i + 1] = pixels[j + 1];
+    result[i + 2] = pixels[j + 2];
+    result[i + 3] = pixels[j + 3];
   }
-  return magickReady;
+  return Uint8Array.from(jpeg.encode({ data: result, width: decoded.width, height: decoded.height }, 90).data);
 }
 
 Deno.serve(async (req) => {
@@ -43,7 +38,7 @@ Deno.serve(async (req) => {
     // Backups also serve as the permanent rotation manifest. A file is never rotated twice.
     stage = "check_backup";
     const { data: existing } = await bucket.info(backupPath);
-    if (existing) return Response.json({ status: "already_backed_up_or_rotated", path, backupPath });
+    if (existing) return Response.json({ status: "backup_exists_review_before_retry", path, backupPath });
 
     if (body.confirm !== true)
       return Response.json({ status: "dry_run", path, backupPath, message: "Submit confirm=true to back up and rotate this JPEG." });
@@ -52,13 +47,8 @@ Deno.serve(async (req) => {
     const { data: original, error: downloadError } = await bucket.download(path);
     if (downloadError || !original) throw downloadError ?? Error("File unavailable");
     const raw = new Uint8Array(await original.arrayBuffer());
-    stage = "initialize_imagemagick";
-    await ensureMagick();
     stage = "rotate_image";
-    const rotated = ImageMagick.read(raw, image => {
-      image.rotate(180);
-      return image.write(MagickFormat.Jpeg, data => Uint8Array.from(data));
-    });
+    const rotated = rotateJpeg180(raw);
 
     stage = "upload_backup";
     const { error: backupError } = await bucket.upload(backupPath, raw, {
